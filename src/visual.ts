@@ -464,9 +464,49 @@ export class Visual implements IVisual {
             this.titleEl.style.fontSize = titleFs + "px";
         }
 
+        // ── Sizing
+        // sizeMode = "auto"  → Fit Container: toggle fills both dims; padding scales with container; text uses user font sizes (optionally scaled by Text Scaling %).
+        // sizeMode = "fixed" → Fixed Size (px) is the master: it drives proportional padding + text + width.
+        const sizeMode = (s.sizing.sizeMode.value as { value?: string })?.value || "fixed";
+        const isFit = sizeMode === "auto";
+        this.root.classList.toggle("tb-fit", isFit);
+
+        // Conditional slice visibility — keep the format pane lean
+        s.sizing.size.visible        = !isFit;
+        s.sizing.textScaling.visible =  isFit;
+
+        const REFERENCE_H = 30;
+        let scaleVal: number;     // drives capsule chrome (padding + gap)
+        let textScale: number;    // drives label + symbol font size
+        if (isFit) {
+            const wrapH = this.wrapEl ? this.wrapEl.clientHeight : (this.viewportH - 4);
+            const containerScale = Math.max(0.5, Math.min(8, (wrapH || REFERENCE_H) / REFERENCE_H));
+            scaleVal = containerScale;
+            // Text scaling factor: 0 = text fixed at user size, 100 = text fully scales with container.
+            const textFactor = Math.max(0, Math.min(100, Number(s.sizing.textScaling.value) || 0)) / 100;
+            textScale = 1 + (containerScale - 1) * textFactor;
+        } else {
+            // Fixed Size is the master — drives chrome AND text proportionally.
+            const fixedSize = Math.max(8, Math.min(400, Number(s.sizing.size.value) || REFERENCE_H));
+            scaleVal = fixedSize / REFERENCE_H;
+            textScale = scaleVal;
+        }
+        root.style.setProperty("--tb-scale", String(scaleVal));
+        root.style.setProperty("--tb-text-scale", String(textScale));
+
+        // ── Per-element font sizes (still multiplied by --tb-scale)
+        const labelFs  = Math.max(6, Math.min(72, Number(s.content.labelFontSize.value)  || 12));
+        const symbolFs = Math.max(6, Math.min(72, Number(s.content.symbolFontSize.value) || 12));
+        root.style.setProperty("--tb-label-fs",  labelFs  + "px");
+        root.style.setProperty("--tb-symbol-fs", symbolFs + "px");
+
         // ── Capsule (radius / padding / surface alphas)
-        const rawRadius = Number(s.capsule.cornerRadius.value);
-        const radius = !isFinite(rawRadius) || rawRadius < 0 ? 999 : rawRadius;
+        // Roundness is a 0–100 % of the toggle's natural height. 100 % = pill (radius = height/2).
+        const naturalHeight = isFit
+            ? (this.wrapEl ? this.wrapEl.clientHeight : REFERENCE_H)
+            : scaleVal * REFERENCE_H;
+        const roundnessPct = Math.max(0, Math.min(100, Number(s.capsule.cornerRadius.value) || 0));
+        const radius = (roundnessPct / 100) * (naturalHeight / 2);
         const rawPad  = Number(s.capsule.thumbPadding.value);
         const pad = Math.max(0, isFinite(rawPad) ? rawPad : 3);
         root.style.setProperty("--toggle-radius", radius + "px");
@@ -479,11 +519,11 @@ export class Visual implements IVisual {
         root.style.setProperty("--toggle-bg-bot", `rgba(255,255,255,${botα})`);
         root.style.setProperty("--toggle-border", `rgba(255,255,255,${borderα})`);
 
-        // ── Thumb (accent + glow)
+        // ── Thumb (accent + glow) — accent drives the thumb tint and glow only.
+        // Active symbol color is now its own setting (text card), independent of accent.
         const accentHex = clr(s.thumb.thumbGlowColor, "#60A5FA");
         const accentTriplet = hexToRgbTriplet(accentHex);
         root.style.setProperty("--thumb-glow-color", accentTriplet);
-        root.style.setProperty("--symbol-color-active", `rgb(${accentTriplet})`);
         root.style.setProperty("--thumb-bg-top", `rgba(${accentTriplet}, 0.18)`);
         root.style.setProperty("--thumb-bg-bot", `rgba(${accentTriplet}, 0.06)`);
         root.style.setProperty("--thumb-border", `rgba(${accentTriplet}, 0.35)`);
@@ -498,8 +538,10 @@ export class Visual implements IVisual {
         root.style.setProperty("--thumb-inner-hl",      `rgba(255,255,255,${hlα})`);
 
         // ── Text
-        root.style.setProperty("--label-active-color", clr(s.text.labelActiveColor,   "#F1F5F9"));
-        root.style.setProperty("--label-color",        clr(s.text.labelInactiveColor, "#94A3B8"));
+        root.style.setProperty("--label-active-color",    clr(s.text.labelActiveColor,    "#F1F5F9"));
+        root.style.setProperty("--label-color",            clr(s.text.labelInactiveColor,  "#94A3B8"));
+        root.style.setProperty("--symbol-color-active",   clr(s.text.symbolActiveColor,   "#60A5FA"));
+        root.style.setProperty("--symbol-color-inactive", clr(s.text.symbolInactiveColor, "#94A3B8"));
         const symα = Math.max(0, Math.min(100, Number(s.text.symbolInactiveAlpha.value) || 0)) / 100;
         root.style.setProperty("--symbol-opacity-inactive", String(symα));
 

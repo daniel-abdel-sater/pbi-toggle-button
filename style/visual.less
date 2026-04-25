@@ -15,9 +15,10 @@
     --thumb-bloom-opacity:  0.45;
     --thumb-inner-hl:       rgba(255,255,255,0.18);
 
-    --label-color:          #94A3B8;
-    --label-active-color:   #F1F5F9;
-    --symbol-color-active:  rgb(96,165,250);
+    --label-color:            #94A3B8;
+    --label-active-color:     #F1F5F9;
+    --symbol-color-active:    #60A5FA;
+    --symbol-color-inactive:  #94A3B8;
     --symbol-opacity-inactive: 0.55;
 
     --transition-duration:  350ms;
@@ -25,6 +26,17 @@
 
     --thumb-x: 0px;
     --thumb-w: 0px;
+
+    /* Scale multipliers
+       --tb-scale       drives button padding + gap (capsule chrome size)
+       --tb-text-scale  drives label + symbol font size (decoupled so user can keep text size constant in Fit Container) */
+    --tb-scale:        1;
+    --tb-text-scale:   1;
+    --tb-btn-pad-y:    calc(8px  * var(--tb-scale));
+    --tb-btn-pad-x:    calc(18px * var(--tb-scale));
+    --tb-btn-gap:      calc(8px  * var(--tb-scale));
+    --tb-label-fs:     12px;
+    --tb-symbol-fs:    12px;
 
     width: 100%;
     height: 100%;
@@ -85,6 +97,21 @@
         min-height: 0;
     }
 
+    /* ── Fit-container mode: toggle stretches to fill both dims ──── */
+    &.tb-fit .tb-toggle {
+        width: 100%;
+        height: 100%;
+    }
+    &.tb-fit .tb-btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 0;
+    }
+    &.tb-fit .tb-lbl, &.tb-fit .tb-sym {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     /* ── Glass capsule track ─────────────────────────────────────── */
     .tb-toggle {
         position: relative;
@@ -137,10 +164,10 @@
         z-index: 1;
         background: transparent;
         border: none;
-        padding: 8px 18px;
+        padding: var(--tb-btn-pad-y) var(--tb-btn-pad-x);
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--tb-btn-gap);
         cursor: pointer;
         color: var(--label-color);
         font: inherit;
@@ -155,16 +182,16 @@
 
     .tb-sym {
         font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
-        font-size: 12px;
+        font-size: calc(var(--tb-symbol-fs) * var(--tb-text-scale));
         font-weight: 500;
         opacity: var(--symbol-opacity-inactive);
-        color: inherit;
+        color: var(--symbol-color-inactive);
         transition:
             opacity var(--transition-duration) var(--transition-ease),
             color var(--transition-duration) var(--transition-ease);
     }
     .tb-lbl {
-        font-size: 12px;
+        font-size: calc(var(--tb-label-fs) * var(--tb-text-scale));
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
