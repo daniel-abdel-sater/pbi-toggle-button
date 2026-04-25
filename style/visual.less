@@ -1,4 +1,31 @@
 .tb-root {
+    /* ── Default CSS variables (overridden inline by JS from format-pane) ── */
+    --toggle-bg-top:        rgba(255,255,255,0.04);
+    --toggle-bg-bot:        rgba(255,255,255,0.015);
+    --toggle-border:        rgba(255,255,255,0.06);
+    --toggle-radius:        999px;
+    --toggle-padding:       3px;
+
+    --thumb-bg-top:         rgba(96,165,250,0.18);
+    --thumb-bg-bot:         rgba(96,165,250,0.06);
+    --thumb-border:         rgba(96,165,250,0.35);
+    --thumb-glow-color:     96, 165, 250;
+    --thumb-glow-spread:    14px;
+    --thumb-ring-opacity:   0.18;
+    --thumb-bloom-opacity:  0.45;
+    --thumb-inner-hl:       rgba(255,255,255,0.18);
+
+    --label-color:          #94A3B8;
+    --label-active-color:   #F1F5F9;
+    --symbol-color-active:  rgb(96,165,250);
+    --symbol-opacity-inactive: 0.55;
+
+    --transition-duration:  350ms;
+    --transition-ease:      cubic-bezier(.22, .61, .36, 1);
+
+    --thumb-x: 0px;
+    --thumb-w: 0px;
+
     width: 100%;
     height: 100%;
     display: grid;
@@ -14,7 +41,7 @@
 
     * { box-sizing: border-box; }
 
-    // Title layout variants — only active when the root has a pos-* class
+    /* ── Title layout variants ───────────────────────────────────── */
     &.pos-top-left, &.pos-top-center, &.pos-top-right {
         grid-template-areas: "title" "toggle";
         grid-template-columns: 1fr;
@@ -45,9 +72,9 @@
         text-overflow: ellipsis;
         align-self: center;
     }
-    &.pos-top-left    .tb-title, &.pos-bottom-left    .tb-title { text-align: left;  }
+    &.pos-top-left    .tb-title, &.pos-bottom-left    .tb-title { text-align: left;   }
     &.pos-top-center  .tb-title, &.pos-bottom-center  .tb-title { text-align: center; }
-    &.pos-top-right   .tb-title, &.pos-bottom-right   .tb-title { text-align: right; }
+    &.pos-top-right   .tb-title, &.pos-bottom-right   .tb-title { text-align: right;  }
 
     .tb-wrap {
         grid-area: toggle;
@@ -58,52 +85,104 @@
         min-height: 0;
     }
 
+    /* ── Glass capsule track ─────────────────────────────────────── */
     .tb-toggle {
         position: relative;
         display: inline-flex;
-        align-items: center;
-        border-radius: var(--tb-radius, 999px);
-        padding: var(--tb-pad, 6px);
+        background: linear-gradient(180deg, var(--toggle-bg-top), var(--toggle-bg-bot));
+        border: 1px solid var(--toggle-border);
+        border-radius: var(--toggle-radius);
+        padding: var(--toggle-padding);
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.04),
+            0 1px 0 rgba(0,0,0,0.4);
+        isolation: isolate;
         cursor: pointer;
         user-select: none;
-        transition: background 0.25s ease, border-color 0.25s ease;
-        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
-        background: #cbd5e1;
 
         &:focus-visible {
-            outline: 2px solid #4f8cff;
+            outline: 2px solid rgba(var(--thumb-glow-color), 0.6);
             outline-offset: 2px;
         }
     }
 
-    .tb-label {
-        position: relative;
-        z-index: 2;
-        display: inline-block;
-        padding: 0 var(--tb-label-pad, 18px);
-        font-size: var(--tb-fs, 16px);
-        font-weight: 600;
-        line-height: var(--tb-thumb, 32px);
-        white-space: nowrap;
-        text-align: center;
-        transition: opacity 0.2s ease;
-        cursor: pointer;
-    }
-
-    .tb-thumb {
+    /* ── Sliding thumb (::before pseudo) ─────────────────────────── */
+    .tb-toggle::before {
+        content: "";
         position: absolute;
-        background: #ffffff;
-        border-radius: var(--tb-radius, 999px);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        top: var(--toggle-padding);
+        bottom: var(--toggle-padding);
+        left: 0;
+        width: var(--thumb-w);
+        transform: translateX(var(--thumb-x));
+        background: linear-gradient(180deg, var(--thumb-bg-top), var(--thumb-bg-bot));
+        border: 1px solid var(--thumb-border);
+        border-radius: calc(var(--toggle-radius) - var(--toggle-padding));
+        box-shadow:
+            0 0 0 1px rgba(var(--thumb-glow-color), var(--thumb-ring-opacity)),
+            0 6px var(--thumb-glow-spread) -6px rgba(var(--thumb-glow-color), var(--thumb-bloom-opacity)),
+            inset 0 1px 0 var(--thumb-inner-hl);
         transition:
-            left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-            width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-            opacity 0.2s ease;
-        z-index: 1;
+            transform var(--transition-duration) var(--transition-ease),
+            width var(--transition-duration) var(--transition-ease);
         pointer-events: none;
+        z-index: 0;
         opacity: 0;
     }
+    .tb-toggle.tb-ready::before { opacity: 1; }
 
+    /* ── Buttons inside the track ────────────────────────────────── */
+    .tb-btn {
+        position: relative;
+        z-index: 1;
+        background: transparent;
+        border: none;
+        padding: 8px 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        color: var(--label-color);
+        font: inherit;
+        border-radius: inherit;
+        transition: color var(--transition-duration) var(--transition-ease);
+
+        &:focus-visible {
+            outline: 2px solid rgba(var(--thumb-glow-color), 0.6);
+            outline-offset: 2px;
+        }
+    }
+
+    .tb-sym {
+        font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
+        font-size: 12px;
+        font-weight: 500;
+        opacity: var(--symbol-opacity-inactive);
+        color: inherit;
+        transition:
+            opacity var(--transition-duration) var(--transition-ease),
+            color var(--transition-duration) var(--transition-ease);
+    }
+    .tb-lbl {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--label-color);
+        transition: color var(--transition-duration) var(--transition-ease);
+    }
+
+    .tb-btn.is-active .tb-sym {
+        opacity: 1;
+        color: var(--symbol-color-active);
+    }
+    .tb-btn.is-active .tb-lbl {
+        color: var(--label-active-color);
+    }
+
+    .tb-sym.is-hidden, .tb-lbl.is-hidden { display: none; }
+
+    /* ── Landing / error states ─────────────────────────────────── */
     .tb-landing {
         text-align: center;
         padding: 24px;
@@ -120,9 +199,6 @@
             color: #64748b;
             line-height: 1.4;
         }
-
-        &.tb-error .tb-landing-title {
-            color: #dc2626;
-        }
+        &.tb-error .tb-landing-title { color: #dc2626; }
     }
 }
