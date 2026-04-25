@@ -1,0 +1,24 @@
+{
+  "visual": {
+    "name": "toggleButton",
+    "displayName": "Toggle Button",
+    "guid": "toggleButtonDA2604241000A1B2",
+    "visualClassName": "Visual",
+    "version": "1.0.0.0",
+    "description": "A toggle switch slicer bound to a 2-value field. Click a side to cross-filter the report; click the selected side again to clear.",
+    "supportUrl": "https://github.com/daniel-abdel-sater/pbi-toggle-button.git",
+    "gitHubUrl": "https://github.com/daniel-abdel-sater/pbi-toggle-button.git"
+  },
+  "author": {
+    "name": "Daniel Abdel Sater",
+    "email": "danielabdelsate@gmail.com"
+  },
+  "apiVersion": "5.11.0",
+  "style": "style/visual.less",
+  "capabilities": "capabilities.json",
+  "assets": {
+    "icon": "assets/icon.png"
+  },
+  "externalJS": [],
+  "source": "src/visual.ts"
+}

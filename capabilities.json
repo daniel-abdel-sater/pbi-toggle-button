@@ -1,0 +1,58 @@
+{
+  "dataRoles": [
+    {
+      "displayName": "Field",
+      "name": "field",
+      "kind": "Grouping",
+      "description": "A column with exactly 2 distinct values. The toggle will switch between them."
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "conditions": [
+        { "field": { "max": 1 } }
+      ],
+      "categorical": {
+        "categories": {
+          "for": { "in": "field" },
+          "dataReductionAlgorithm": { "top": { "count": 10 } }
+        }
+      }
+    }
+  ],
+  "objects": {
+    "general": {
+      "displayName": "Toggle",
+      "properties": {
+        "showTitle":     { "displayName": "Show Title",          "type": { "bool": true } },
+        "titleText":     { "displayName": "Title Text",          "type": { "text": true } },
+        "titlePosition": { "displayName": "Title Position",      "type": { "text": true } },
+        "titleColor":    { "displayName": "Title Color",         "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize": { "displayName": "Title Font Size",     "type": { "numeric": true } },
+        "sizeMode":     { "displayName": "Size Mode",           "type": { "text": true } },
+        "size":         { "displayName": "Fixed Size (px)",     "type": { "numeric": true } },
+        "cornerRadius": { "displayName": "Corner Radius",       "type": { "numeric": true } },
+        "thumbPadding": { "displayName": "Thumb Padding (px)",  "type": { "numeric": true } },
+        "thumbColorA":     { "displayName": "Thumb Color (A)",            "type": { "fill": { "solid": { "color": true } } } },
+        "thumbColorB":     { "displayName": "Thumb Color (B)",            "type": { "fill": { "solid": { "color": true } } } },
+        "labelColorAOn":   { "displayName": "Value A Label Color (On)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelColorAOff":  { "displayName": "Value A Label Color (Off)", "type": { "fill": { "solid": { "color": true } } } },
+        "labelColorBOn":   { "displayName": "Value B Label Color (On)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelColorBOff":  { "displayName": "Value B Label Color (Off)", "type": { "fill": { "solid": { "color": true } } } },
+        "showLabels":   { "displayName": "Show Labels",         "type": { "bool": true } },
+        "labelAlign":   { "displayName": "Label Alignment",     "type": { "text": true } },
+        "showBorder":   { "displayName": "Show Border",         "type": { "bool": true } },
+        "borderColor":  { "displayName": "Border Color",        "type": { "fill": { "solid": { "color": true } } } }
+      }
+    },
+    "toolbar": {
+      "displayName": "Runtime State",
+      "properties": {
+        "selectedValue": { "displayName": "Selected Value", "type": { "text": true } }
+      }
+    }
+  },
+  "privileges": [],
+  "supportsKeyboardFocus": true,
+  "supportsLandingPage": true
+}

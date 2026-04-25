@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Toggle Button — Mockup</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#161b26; --panel-2:#1d2433;
+    --border:#2a3347; --text:#e2e8f0; --text-dim:#94a3b8;
+    --accent:#4f8cff;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--text);
+    display:grid; grid-template-columns:1fr 320px;
+    min-height:100vh;
+  }
+
+  /* ---------- Stage (simulates PBI visual container) ---------- */
+  .stage{
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; position:relative;
+  }
+  .viz-frame{
+    width:100%; max-width:780px; height:420px;
+    background:#fff; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 10px 40px rgba(0,0,0,0.4);
+    position:relative;
+  }
+  .viz-frame::before{
+    content:"Visual container (white = PBI canvas)";
+    position:absolute; top:10px; left:14px;
+    font-size:11px; color:#94a3b8; letter-spacing:0.3px;
+  }
+
+  /* ---------- Toggle (the actual visual) ---------- */
+  .toggle{
+    display:inline-flex; align-items:center;
+    background:var(--track-color, #cbd5e1);
+    border-radius:999px;
+    cursor:pointer; user-select:none;
+    position:relative;
+    transition:background 0.25s ease;
+    padding:var(--pad, 6px);
+    font-family:"Segoe UI",sans-serif;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.12);
+  }
+  .toggle .label{
+    flex:0 0 auto;
+    padding:0 var(--label-pad, 18px);
+    font-size:var(--fs, 16px);
+    font-weight:600;
+    color:#fff;
+    line-height:var(--thumb, 36px);
+    transition:opacity 0.2s ease, color 0.2s ease;
+    white-space:nowrap;
+    z-index:2; position:relative;
+  }
+  .toggle .label.inactive{
+    opacity:0.55; color:rgba(255,255,255,0.85);
+  }
+  .toggle .thumb{
+    position:absolute;
+    top:var(--pad, 6px);
+    height:var(--thumb, 36px);
+    background:#fff;
+    border-radius:999px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    transition:left 0.28s cubic-bezier(0.4,0,0.2,1), width 0.28s cubic-bezier(0.4,0,0.2,1);
+    z-index:1;
+  }
+
+  /* ---------- Side panel ---------- */
+  .panel{
+    background:var(--panel); border-left:1px solid var(--border);
+    padding:20px; overflow-y:auto;
+  }
+  .panel h2{
+    margin:0 0 4px; font-size:13px; letter-spacing:0.5px;
+    text-transform:uppercase; color:var(--text-dim);
+  }
+  .panel .sub{font-size:11px; color:var(--text-dim); margin-bottom:16px}
+
+  .group{margin-bottom:22px}
+  .group-title{
+    font-size:12px; font-weight:600; color:#cbd5e1;
+    margin-bottom:10px; padding-bottom:6px;
+    border-bottom:1px solid var(--border);
+  }
+  .field{margin-bottom:12px}
+  .field label{
+    display:block; font-size:11px; color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  .field input[type=text], .field input[type=number]{
+    width:100%; background:var(--panel-2); color:var(--text);
+    border:1px solid var(--border); border-radius:4px;
+    padding:6px 8px; font-size:12px; font-family:inherit;
+  }
+  .field input[type=range]{width:100%}
+  .field-row{display:flex; gap:8px}
+  .field-row > *{flex:1}
+  .color-row{display:flex; align-items:center; gap:8px}
+  .color-row input[type=color]{
+    width:34px; height:28px; border:1px solid var(--border);
+    background:var(--panel-2); border-radius:4px; padding:2px; cursor:pointer;
+  }
+  .color-row .hex{
+    flex:1; font-family:"Segoe UI Mono",Consolas,monospace;
+    font-size:11px; color:var(--text);
+    background:var(--panel-2); border:1px solid var(--border);
+    border-radius:4px; padding:6px 8px;
+  }
+  .value-row{
+    display:flex; justify-content:space-between;
+    font-size:11px; color:var(--text-dim); margin-top:2px;
+  }
+
+  /* ---------- Interaction log ---------- */
+  .log{
+    position:absolute; bottom:16px; left:16px;
+    background:rgba(0,0,0,0.82); color:#7ee787;
+    padding:8px 12px; border-radius:4px;
+    font-family:"Segoe UI Mono",Consolas,monospace;
+    font-size:11px; pointer-events:none;
+    transition:opacity 0.3s; opacity:0;
+  }
+  .log.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="viz-frame">
+    <div class="toggle" id="toggle">
+      <span class="label" id="labelA">Off</span>
+      <span class="label" id="labelB">On</span>
+      <div class="thumb" id="thumb"></div>
+    </div>
+  </div>
+  <div class="log" id="log"></div>
+</div>
+
+<aside class="panel">
+  <h2>Format pane (mock)</h2>
+  <div class="sub">These are the controls that will appear in the PBI format pane.</div>
+
+  <div class="group">
+    <div class="group-title">Data field (simulated)</div>
+    <div class="field">
+      <label>Value A (off side)</label>
+      <input type="text" id="inA" value="Off" />
+    </div>
+    <div class="field">
+      <label>Value B (on side)</label>
+      <input type="text" id="inB" value="On" />
+    </div>
+    <div class="field">
+      <label>Selected value</label>
+      <div class="field-row">
+        <button id="setA" style="padding:6px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:4px; cursor:pointer;">Select A</button>
+        <button id="setB" style="padding:6px; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:4px; cursor:pointer;">Select B</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Toggle Size</div>
+    <div class="field">
+      <label>Size <span id="sizeOut" style="float:right; color:var(--text)">40</span></label>
+      <input type="range" id="size" min="24" max="80" value="40" />
+      <div class="value-row"><span>24 px</span><span>80 px</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Toggle — Value A colour (off-side)</div>
+    <div class="field color-row">
+      <input type="color" id="colorA" value="#94a3b8" />
+      <input type="text" class="hex" id="hexA" value="#94a3b8" />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Toggle — Value B colour (on-side)</div>
+    <div class="field color-row">
+      <input type="color" id="colorB" value="#4f8cff" />
+      <input type="text" class="hex" id="hexB" value="#4f8cff" />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Behaviour</div>
+    <div class="sub" style="margin:0">
+      Clicking the toggle switches the selected value and will cross-filter other visuals in the report by that value.
+    </div>
+  </div>
+</aside>
+
+<script>
+  const toggle  = document.getElementById('toggle');
+  const labelA  = document.getElementById('labelA');
+  const labelB  = document.getElementById('labelB');
+  const thumb   = document.getElementById('thumb');
+
+  const inA     = document.getElementById('inA');
+  const inB     = document.getElementById('inB');
+  const size    = document.getElementById('size');
+  const sizeOut = document.getElementById('sizeOut');
+  const colorA  = document.getElementById('colorA');
+  const colorB  = document.getElementById('colorB');
+  const hexA    = document.getElementById('hexA');
+  const hexB    = document.getElementById('hexB');
+  const setA    = document.getElementById('setA');
+  const setB    = document.getElementById('setB');
+  const log     = document.getElementById('log');
+
+  let selected = 'A';   // 'A' or 'B'
+
+  function flash(msg){
+    log.textContent = msg;
+    log.classList.add('show');
+    clearTimeout(flash._t);
+    flash._t = setTimeout(()=>log.classList.remove('show'), 1600);
+  }
+
+  function layout(){
+    const s        = Number(size.value);
+    const pad      = Math.round(s * 0.15);
+    const thumbH   = s - pad*2;
+    const fs       = Math.round(s * 0.40);
+    const labelPad = Math.round(s * 0.45);
+
+    toggle.style.setProperty('--pad',        pad      + 'px');
+    toggle.style.setProperty('--thumb',      thumbH   + 'px');
+    toggle.style.setProperty('--fs',         fs       + 'px');
+    toggle.style.setProperty('--label-pad',  labelPad + 'px');
+
+    labelA.textContent = inA.value || 'A';
+    labelB.textContent = inB.value || 'B';
+
+    // measure label widths to position thumb
+    requestAnimationFrame(()=>{
+      const rA = labelA.getBoundingClientRect();
+      const rB = labelB.getBoundingClientRect();
+      const active = selected === 'A' ? rA : rB;
+      const activeLeft = selected === 'A' ? pad : pad + rA.width;
+      thumb.style.width = active.width + 'px';
+      thumb.style.left  = activeLeft + 'px';
+    });
+
+    labelA.classList.toggle('inactive', selected !== 'A');
+    labelB.classList.toggle('inactive', selected !== 'B');
+
+    toggle.style.setProperty('--track-color', selected === 'A' ? colorA.value : colorB.value);
+    sizeOut.textContent = s;
+  }
+
+  function select(which, fromClick){
+    if(selected === which) return;
+    selected = which;
+    layout();
+    if(fromClick) flash('Cross-filter \u2192 ' + (which==='A' ? inA.value : inB.value));
+  }
+
+  toggle.addEventListener('click', ()=>{
+    select(selected === 'A' ? 'B' : 'A', true);
+  });
+
+  setA.addEventListener('click', ()=>select('A', true));
+  setB.addEventListener('click', ()=>select('B', true));
+
+  [inA, inB, size].forEach(el => el.addEventListener('input', layout));
+  colorA.addEventListener('input', ()=>{ hexA.value = colorA.value; layout(); });
+  colorB.addEventListener('input', ()=>{ hexB.value = colorB.value; layout(); });
+  hexA.addEventListener('change', ()=>{ if(/^#[0-9a-f]{6}$/i.test(hexA.value)){ colorA.value = hexA.value; layout(); }});
+  hexB.addEventListener('change', ()=>{ if(/^#[0-9a-f]{6}$/i.test(hexB.value)){ colorB.value = hexB.value; layout(); }});
+
+  window.addEventListener('resize', layout);
+  layout();
+</script>
+
+</body>
+</html>

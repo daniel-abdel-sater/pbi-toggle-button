@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Glass Capsule Toggle — Mockup</title>
+<style>
+  /* ===========================================================
+     CSS variables — all driven by side-panel controls.
+     The PBI visual will read identical names from format pane.
+     =========================================================== */
+  .tb-root {
+    --toggle-bg-top:        rgba(255,255,255,0.04);
+    --toggle-bg-bot:        rgba(255,255,255,0.015);
+    --toggle-border:        rgba(255,255,255,0.06);
+    --toggle-radius:        999px;
+    --toggle-padding:       3px;
+
+    --thumb-bg-top:         rgba(255,255,255,0.10);
+    --thumb-bg-bot:         rgba(255,255,255,0.04);
+    --thumb-border:         rgba(255,255,255,0.10);
+    --thumb-glow-color:     96, 165, 250;       /* RGB triplet so we can rgba() it */
+    --thumb-glow-spread:    14px;
+    --thumb-ring-opacity:   0.18;
+    --thumb-bloom-opacity:  0.45;
+    --thumb-inner-hl:       rgba(255,255,255,0.18);
+
+    --label-color:          #94A3B8;
+    --label-active-color:   #F1F5F9;
+    --symbol-color-active:  rgb(96,165,250);
+    --symbol-opacity-inactive: 0.55;
+
+    --transition-duration:  350ms;
+    --transition-ease:      cubic-bezier(.22, .61, .36, 1);
+
+    --thumb-x:              0px;
+    --thumb-w:              0px;
+
+    /* Page surface */
+    --page-bg:              #0B1220;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:"Inter","Segoe UI",sans-serif;
+    background:var(--page-bg);
+    color:#E2E8F0;
+    display:grid;
+    grid-template-columns:1fr 360px;
+    min-height:100vh;
+  }
+
+  /* ===========================================================
+     Stage
+     =========================================================== */
+  .stage{
+    display:flex; align-items:center; justify-content:center;
+    padding:48px; position:relative; flex-direction:column; gap:48px;
+  }
+  .stage-label{
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:#64748B;
+  }
+
+  /* ===========================================================
+     The Toggle — capsule track + ::before thumb + buttons
+     =========================================================== */
+  .tb-root{
+    /* Wrapper to scope the variables */
+    display:inline-flex;
+  }
+  .tb-toggle{
+    position:relative;
+    display:inline-flex;
+    background:linear-gradient(180deg, var(--toggle-bg-top), var(--toggle-bg-bot));
+    border:1px solid var(--toggle-border);
+    border-radius:var(--toggle-radius);
+    padding:var(--toggle-padding);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.04),
+      0 1px 0 rgba(0,0,0,0.4);
+    isolation:isolate;
+  }
+  .tb-toggle::before{
+    content:"";
+    position:absolute;
+    top:var(--toggle-padding);
+    bottom:var(--toggle-padding);
+    left:0;
+    width:var(--thumb-w);
+    transform:translateX(var(--thumb-x));
+    background:linear-gradient(180deg, var(--thumb-bg-top), var(--thumb-bg-bot));
+    border:1px solid var(--thumb-border);
+    border-radius:calc(var(--toggle-radius) - var(--toggle-padding));
+    box-shadow:
+      0 0 0 1px rgba(var(--thumb-glow-color), var(--thumb-ring-opacity)),
+      0 6px var(--thumb-glow-spread) -6px rgba(var(--thumb-glow-color), var(--thumb-bloom-opacity)),
+      inset 0 1px 0 var(--thumb-inner-hl);
+    transition:
+      transform var(--transition-duration) var(--transition-ease),
+      width var(--transition-duration) var(--transition-ease);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .tb-btn{
+    position:relative;
+    z-index:1;
+    background:transparent;
+    border:none;
+    padding:8px 18px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    cursor:pointer;
+    color:var(--label-color);
+    font:inherit;
+    border-radius:inherit;
+    transition:color var(--transition-duration) var(--transition-ease);
+    user-select:none;
+  }
+  .tb-btn:focus-visible{
+    outline:2px solid rgba(var(--thumb-glow-color), 0.6);
+    outline-offset:2px;
+  }
+  .tb-sym{
+    font-family:"SF Mono","JetBrains Mono","Fira Code",Consolas,monospace;
+    font-size:12px;
+    font-weight:500;
+    opacity:var(--symbol-opacity-inactive);
+    color:inherit;
+    transition:opacity var(--transition-duration) var(--transition-ease),
+               color var(--transition-duration) var(--transition-ease);
+  }
+  .tb-lbl{
+    font-size:12px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--label-color);
+    transition:color var(--transition-duration) var(--transition-ease);
+  }
+  .tb-btn.is-active .tb-sym{
+    opacity:1;
+    color:var(--symbol-color-active);
+  }
+  .tb-btn.is-active .tb-lbl{
+    color:var(--label-active-color);
+  }
+  .tb-sym.is-hidden, .tb-lbl.is-hidden{display:none}
+
+  /* ===========================================================
+     Side panel controls
+     =========================================================== */
+  .panel{
+    background:#0F172A;
+    border-left:1px solid #1E293B;
+    padding:20px;
+    overflow-y:auto;
+    max-height:100vh;
+  }
+  .panel h2{
+    margin:0 0 4px;
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#64748B;
+  }
+  .panel .sub{font-size:11px; color:#475569; margin-bottom:18px}
+  .group{margin-bottom:22px}
+  .group-title{
+    font-size:11px; font-weight:600; color:#CBD5E1;
+    margin-bottom:10px; padding-bottom:6px;
+    border-bottom:1px solid #1E293B; letter-spacing:.04em; text-transform:uppercase;
+  }
+  .field{margin-bottom:10px}
+  .field label{
+    display:block; font-size:11px; color:#94A3B8; margin-bottom:4px;
+  }
+  .field input[type=text], .field input[type=number]{
+    width:100%; background:#1E293B; color:#F1F5F9;
+    border:1px solid #334155; border-radius:4px;
+    padding:6px 8px; font-size:12px; font-family:inherit;
+  }
+  .field input[type=range]{width:100%}
+  .field-row{display:flex; gap:8px} .field-row > *{flex:1}
+  .color-row{display:flex; align-items:center; gap:8px}
+  .color-row input[type=color]{
+    width:34px; height:28px; border:1px solid #334155;
+    background:#1E293B; border-radius:4px; padding:2px; cursor:pointer;
+  }
+  .color-row .hex{
+    flex:1; font-family:"SF Mono",Consolas,monospace;
+    font-size:11px; color:#F1F5F9;
+    background:#1E293B; border:1px solid #334155;
+    border-radius:4px; padding:6px 8px;
+  }
+  .value-row{
+    display:flex; justify-content:space-between;
+    font-size:10px; color:#475569; margin-top:2px;
+  }
+  .toggle-row{display:flex; align-items:center; gap:8px; font-size:11px; color:#94A3B8}
+  .btn-row{display:flex; gap:8px}
+  .btn-row button{
+    flex:1; padding:6px;
+    background:#1E293B; color:#F1F5F9;
+    border:1px solid #334155; border-radius:4px;
+    cursor:pointer; font-size:11px;
+  }
+
+  /* ===========================================================
+     Cross-filter event log
+     =========================================================== */
+  .log{
+    position:absolute; bottom:16px; left:16px;
+    background:rgba(0,0,0,0.85); color:#86EFAC;
+    padding:8px 12px; border-radius:4px;
+    font-family:"SF Mono",Consolas,monospace;
+    font-size:11px; pointer-events:none;
+    transition:opacity 0.3s; opacity:0;
+  }
+  .log.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage-label">Visual container · click a side</div>
+
+  <div class="tb-root" id="root">
+    <div class="tb-toggle" role="group" id="toggle">
+      <button class="tb-btn tb-btn-a is-active" type="button" data-side="A">
+        <span class="tb-sym" id="symA">$</span>
+        <span class="tb-lbl" id="lblA">USD</span>
+      </button>
+      <button class="tb-btn tb-btn-b" type="button" data-side="B">
+        <span class="tb-sym" id="symB">D</span>
+        <span class="tb-lbl" id="lblB">DAYS</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<aside class="panel">
+  <h2>Format pane (mock)</h2>
+  <div class="sub">Live preview of every CSS variable. Whatever knobs you keep here will become format-pane settings in the visual.</div>
+
+  <div class="group">
+    <div class="group-title">Content</div>
+    <div class="field-row">
+      <div class="field">
+        <label>Symbol A</label>
+        <input type="text" id="inSymA" value="$" maxlength="3" />
+      </div>
+      <div class="field">
+        <label>Symbol B</label>
+        <input type="text" id="inSymB" value="D" maxlength="3" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Label A</label>
+        <input type="text" id="inLblA" value="USD" />
+      </div>
+      <div class="field">
+        <label>Label B</label>
+        <input type="text" id="inLblB" value="DAYS" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field toggle-row">
+        <input type="checkbox" id="showSym" checked /> <label for="showSym" style="margin:0">Show symbols</label>
+      </div>
+      <div class="field toggle-row">
+        <input type="checkbox" id="showLbl" checked /> <label for="showLbl" style="margin:0">Show labels</label>
+      </div>
+    </div>
+    <div class="field btn-row">
+      <button id="setA">Activate A</button>
+      <button id="setB">Activate B</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Track (Capsule)</div>
+    <div class="field-row">
+      <div class="field">
+        <label>Padding <span id="padOut" style="float:right;color:#F1F5F9">3</span></label>
+        <input type="range" id="pad" min="0" max="12" value="3" />
+      </div>
+      <div class="field">
+        <label>Radius <span id="radOut" style="float:right;color:#F1F5F9">999</span></label>
+        <input type="range" id="rad" min="0" max="999" value="999" />
+      </div>
+    </div>
+    <div class="field color-row">
+      <input type="color" id="trackBgTop" value="#0a1118" />
+      <input type="text" class="hex" id="trackBgHex" value="rgba(255,255,255,0.04)" placeholder="top stop"/>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Track top α <span id="topαOut" style="float:right;color:#F1F5F9">0.04</span></label>
+        <input type="range" id="topα" min="0" max="1" step="0.005" value="0.04" />
+      </div>
+      <div class="field">
+        <label>Track bot α <span id="botαOut" style="float:right;color:#F1F5F9">0.015</span></label>
+        <input type="range" id="botα" min="0" max="1" step="0.005" value="0.015" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Border α <span id="borderαOut" style="float:right;color:#F1F5F9">0.06</span></label>
+      <input type="range" id="borderα" min="0" max="1" step="0.005" value="0.06" />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Thumb · Glow</div>
+    <div class="field color-row">
+      <input type="color" id="accent" value="#60A5FA" />
+      <input type="text" class="hex" id="accentHex" value="#60A5FA" />
+    </div>
+    <div class="field">
+      <label>Ring α <span id="ringOut" style="float:right;color:#F1F5F9">0.18</span></label>
+      <input type="range" id="ring" min="0" max="1" step="0.01" value="0.18" />
+    </div>
+    <div class="field">
+      <label>Bloom α <span id="bloomOut" style="float:right;color:#F1F5F9">0.45</span></label>
+      <input type="range" id="bloom" min="0" max="1" step="0.01" value="0.45" />
+    </div>
+    <div class="field">
+      <label>Bloom spread <span id="spreadOut" style="float:right;color:#F1F5F9">14px</span></label>
+      <input type="range" id="spread" min="0" max="40" value="14" />
+    </div>
+    <div class="field">
+      <label>Inner highlight α <span id="hlOut" style="float:right;color:#F1F5F9">0.18</span></label>
+      <input type="range" id="hl" min="0" max="1" step="0.01" value="0.18" />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Text</div>
+    <div class="field color-row">
+      <input type="color" id="labelActive" value="#F1F5F9" />
+      <input type="text" class="hex" id="labelActiveHex" value="#F1F5F9" />
+    </div>
+    <div class="field" style="margin-top:-6px;font-size:10px;color:#475569">Active label color</div>
+    <div class="field color-row">
+      <input type="color" id="labelInactive" value="#94A3B8" />
+      <input type="text" class="hex" id="labelInactiveHex" value="#94A3B8" />
+    </div>
+    <div class="field" style="margin-top:-6px;font-size:10px;color:#475569">Inactive label color</div>
+    <div class="field">
+      <label>Inactive symbol α <span id="symαOut" style="float:right;color:#F1F5F9">0.55</span></label>
+      <input type="range" id="symα" min="0" max="1" step="0.01" value="0.55" />
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Animation</div>
+    <div class="field-row">
+      <div class="field">
+        <label>Duration (ms) <span id="durOut" style="float:right;color:#F1F5F9">350</span></label>
+        <input type="range" id="dur" min="0" max="1200" step="10" value="350" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Easing</label>
+      <select id="ease" style="width:100%;background:#1E293B;color:#F1F5F9;border:1px solid #334155;border-radius:4px;padding:6px 8px;font:inherit">
+        <option value="cubic-bezier(.22,.61,.36,1)" selected>cubic-bezier(.22,.61,.36,1) — spec default</option>
+        <option value="cubic-bezier(.4,0,.2,1)">cubic-bezier(.4,0,.2,1) — Material</option>
+        <option value="cubic-bezier(.34,1.56,.64,1)">cubic-bezier(.34,1.56,.64,1) — overshoot</option>
+        <option value="ease-out">ease-out</option>
+        <option value="linear">linear</option>
+      </select>
+    </div>
+  </div>
+</aside>
+
+<script>
+  const root    = document.getElementById('root');
+  const toggle  = document.getElementById('toggle');
+  const symA    = document.getElementById('symA');
+  const symB    = document.getElementById('symB');
+  const lblA    = document.getElementById('lblA');
+  const lblB    = document.getElementById('lblB');
+  const btns    = toggle.querySelectorAll('.tb-btn');
+  const log     = document.getElementById('log');
+
+  // Inputs
+  const inSymA  = document.getElementById('inSymA');
+  const inSymB  = document.getElementById('inSymB');
+  const inLblA  = document.getElementById('inLblA');
+  const inLblB  = document.getElementById('inLblB');
+  const showSym = document.getElementById('showSym');
+  const showLbl = document.getElementById('showLbl');
+  const setA    = document.getElementById('setA');
+  const setB    = document.getElementById('setB');
+
+  const padIn   = document.getElementById('pad');
+  const radIn   = document.getElementById('rad');
+  const topαIn  = document.getElementById('topα');
+  const botαIn  = document.getElementById('botα');
+  const borderαIn = document.getElementById('borderα');
+
+  const accent      = document.getElementById('accent');
+  const accentHex   = document.getElementById('accentHex');
+  const ringIn      = document.getElementById('ring');
+  const bloomIn     = document.getElementById('bloom');
+  const spreadIn    = document.getElementById('spread');
+  const hlIn        = document.getElementById('hl');
+
+  const labelActive    = document.getElementById('labelActive');
+  const labelActiveHex = document.getElementById('labelActiveHex');
+  const labelInactive  = document.getElementById('labelInactive');
+  const labelInactiveHex = document.getElementById('labelInactiveHex');
+  const symαIn         = document.getElementById('symα');
+
+  const durIn   = document.getElementById('dur');
+  const easeIn  = document.getElementById('ease');
+
+  // Outputs
+  const padOut = document.getElementById('padOut');
+  const radOut = document.getElementById('radOut');
+  const topαOut= document.getElementById('topαOut');
+  const botαOut= document.getElementById('botαOut');
+  const borderαOut = document.getElementById('borderαOut');
+  const ringOut= document.getElementById('ringOut');
+  const bloomOut=document.getElementById('bloomOut');
+  const spreadOut=document.getElementById('spreadOut');
+  const hlOut  = document.getElementById('hlOut');
+  const symαOut= document.getElementById('symαOut');
+  const durOut = document.getElementById('durOut');
+
+  let activeSide = 'A';
+
+  // ───────────────────────────────────────────────────────────
+  //  Helpers
+  // ───────────────────────────────────────────────────────────
+  function hexToRgb(hex){
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if(!m) return [96,165,250];
+    const n = parseInt(m[1],16);
+    return [(n>>16)&255, (n>>8)&255, n&255];
+  }
+
+  function flash(msg){
+    log.textContent = msg;
+    log.classList.add('show');
+    clearTimeout(flash._t);
+    flash._t = setTimeout(()=>log.classList.remove('show'), 1800);
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Position the ::before thumb based on the active button rect.
+  //  This is the JS that will live in PBI's positionThumb().
+  // ───────────────────────────────────────────────────────────
+  function positionThumb(){
+    const active = toggle.querySelector('.tb-btn.is-active');
+    if(!active) return;
+    const t = toggle.getBoundingClientRect();
+    const a = active.getBoundingClientRect();
+    const padNum = parseFloat(getComputedStyle(toggle).getPropertyValue('--toggle-padding')) || 0;
+    const x = a.left - t.left - padNum;
+    const w = a.width + 6;
+    toggle.style.setProperty('--thumb-x', x + 'px');
+    toggle.style.setProperty('--thumb-w', w + 'px');
+  }
+
+  function setActive(side, fromClick){
+    btns.forEach(b => {
+      const isActive = b.dataset.side === side;
+      b.classList.toggle('is-active', isActive);
+      b.setAttribute('aria-pressed', String(isActive));
+    });
+    activeSide = side;
+    positionThumb();
+    if(fromClick){
+      const valLabel = side === 'A' ? (inLblA.value || 'A') : (inLblB.value || 'B');
+      flash(`cross-filter → ${valLabel}`);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Apply CSS variables from controls
+  // ───────────────────────────────────────────────────────────
+  function applyVars(){
+    const r = root;
+
+    // Track
+    const pad = padIn.value;
+    const rad = radIn.value;
+    padOut.textContent = pad;
+    radOut.textContent = rad;
+    r.style.setProperty('--toggle-padding', pad + 'px');
+    r.style.setProperty('--toggle-radius', rad + 'px');
+
+    const topα = parseFloat(topαIn.value), botα = parseFloat(botαIn.value);
+    const borderα = parseFloat(borderαIn.value);
+    topαOut.textContent = topα.toFixed(3);
+    botαOut.textContent = botα.toFixed(3);
+    borderαOut.textContent = borderα.toFixed(3);
+    r.style.setProperty('--toggle-bg-top', `rgba(255,255,255,${topα})`);
+    r.style.setProperty('--toggle-bg-bot', `rgba(255,255,255,${botα})`);
+    r.style.setProperty('--toggle-border', `rgba(255,255,255,${borderα})`);
+
+    // Glow accent
+    accentHex.value = accent.value;
+    const [ar,ag,ab] = hexToRgb(accent.value);
+    r.style.setProperty('--thumb-glow-color', `${ar}, ${ag}, ${ab}`);
+    r.style.setProperty('--symbol-color-active', `rgb(${ar},${ag},${ab})`);
+    r.style.setProperty('--thumb-border', `rgba(${ar},${ag},${ab}, 0.35)`);
+    r.style.setProperty('--thumb-bg-top', `rgba(${ar},${ag},${ab}, 0.18)`);
+    r.style.setProperty('--thumb-bg-bot', `rgba(${ar},${ag},${ab}, 0.06)`);
+
+    const ring = parseFloat(ringIn.value);
+    const bloom = parseFloat(bloomIn.value);
+    const spread = spreadIn.value;
+    const hl = parseFloat(hlIn.value);
+    ringOut.textContent = ring.toFixed(2);
+    bloomOut.textContent = bloom.toFixed(2);
+    spreadOut.textContent = spread + 'px';
+    hlOut.textContent = hl.toFixed(2);
+    r.style.setProperty('--thumb-ring-opacity', ring);
+    r.style.setProperty('--thumb-bloom-opacity', bloom);
+    r.style.setProperty('--thumb-glow-spread', spread + 'px');
+    r.style.setProperty('--thumb-inner-hl', `rgba(255,255,255,${hl})`);
+
+    // Text
+    labelActiveHex.value = labelActive.value;
+    labelInactiveHex.value = labelInactive.value;
+    r.style.setProperty('--label-active-color', labelActive.value);
+    r.style.setProperty('--label-color', labelInactive.value);
+    const symα = parseFloat(symαIn.value);
+    symαOut.textContent = symα.toFixed(2);
+    r.style.setProperty('--symbol-opacity-inactive', symα);
+
+    // Animation
+    durOut.textContent = durIn.value;
+    r.style.setProperty('--transition-duration', durIn.value + 'ms');
+    r.style.setProperty('--transition-ease', easeIn.value);
+
+    // Content
+    symA.textContent = inSymA.value;
+    symB.textContent = inSymB.value;
+    lblA.textContent = inLblA.value;
+    lblB.textContent = inLblB.value;
+    symA.classList.toggle('is-hidden', !showSym.checked || !inSymA.value);
+    symB.classList.toggle('is-hidden', !showSym.checked || !inSymB.value);
+    lblA.classList.toggle('is-hidden', !showLbl.checked);
+    lblB.classList.toggle('is-hidden', !showLbl.checked);
+
+    // Recompute thumb after any size-affecting change
+    requestAnimationFrame(positionThumb);
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Wire up
+  // ───────────────────────────────────────────────────────────
+  btns.forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    setActive(b.dataset.side, true);
+  }));
+  setA.addEventListener('click', () => setActive('A', true));
+  setB.addEventListener('click', () => setActive('B', true));
+
+  [inSymA, inSymB, inLblA, inLblB, showSym, showLbl,
+   padIn, radIn, topαIn, botαIn, borderαIn,
+   accent, ringIn, bloomIn, spreadIn, hlIn,
+   labelActive, labelInactive, symαIn, durIn, easeIn].forEach(el =>
+    el.addEventListener('input', applyVars)
+  );
+
+  // Hex inputs sync back to color pickers
+  accentHex.addEventListener('change', () => {
+    if(/^#[0-9a-f]{6}$/i.test(accentHex.value)){ accent.value = accentHex.value; applyVars(); }
+  });
+  labelActiveHex.addEventListener('change', () => {
+    if(/^#[0-9a-f]{6}$/i.test(labelActiveHex.value)){ labelActive.value = labelActiveHex.value; applyVars(); }
+  });
+  labelInactiveHex.addEventListener('change', () => {
+    if(/^#[0-9a-f]{6}$/i.test(labelInactiveHex.value)){ labelInactive.value = labelInactiveHex.value; applyVars(); }
+  });
+
+  // Resize observer — same pattern the PBI visual will use
+  new ResizeObserver(() => requestAnimationFrame(positionThumb)).observe(toggle);
+  window.addEventListener('resize', () => requestAnimationFrame(positionThumb));
+
+  applyVars();
+  // Initial position after first paint
+  requestAnimationFrame(positionThumb);
+</script>
+</body>
+</html>
