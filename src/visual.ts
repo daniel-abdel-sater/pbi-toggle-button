@@ -102,18 +102,20 @@ export class Visual implements IVisual {
                 );
                 // §11.0c: text-typed ItemDropdowns are not reliably bound by populate.
                 // Force-sync from metadata so dropdown changes reflect live without page nav.
-                const meta = (dv.metadata?.objects as { general?: Record<string, unknown> } | undefined)?.general;
-                const syncDropdown = (slice: formattingSettings.ItemDropdown, propName: string): void => {
-                    const raw = meta?.[propName];
+                const meta = dv.metadata?.objects as Record<string, Record<string, unknown> | undefined> | undefined;
+                const syncDropdown = (
+                    slice: formattingSettings.ItemDropdown, cardName: string, propName: string
+                ): void => {
+                    const raw = meta?.[cardName]?.[propName];
                     if (typeof raw === "string") {
                         const items = (slice.items as Array<{ value: string; displayName: string }> | undefined) || [];
                         const item = items.find(it => it.value === raw);
                         if (item) slice.value = item;
                     }
                 };
-                syncDropdown(this.fmtSettings.general.sizeMode,       "sizeMode");
-                syncDropdown(this.fmtSettings.general.titlePosition,  "titlePosition");
-                syncDropdown(this.fmtSettings.general.transitionEase, "transitionEase");
+                syncDropdown(this.fmtSettings.sizing.sizeMode,           "sizing",    "sizeMode");
+                syncDropdown(this.fmtSettings.title.titlePosition,       "title",     "titlePosition");
+                syncDropdown(this.fmtSettings.animation.transitionEase,  "animation", "transitionEase");
             }
 
             const cat = dv?.categorical?.categories?.[0];
@@ -204,14 +206,14 @@ export class Visual implements IVisual {
 
             // Render-key gate: rebuild DOM only when STRUCTURE changes. Anything that's just a
             // CSS-var tweak (colors, alphas, durations, spread) goes through applyLayout() only.
-            const g = this.fmtSettings.general;
-            const titleText = String(g.titleText.value ?? "").trim();
-            const showTitle = g.showTitle.value === true && titleText !== "";
-            const titlePos  = (g.titlePosition.value as { value?: string })?.value || "top-left";
-            const showSymbols = g.showSymbols.value !== false;
-            const showLabels  = g.showLabels.value !== false;
-            const symA = String(g.symbolA.value ?? "");
-            const symB = String(g.symbolB.value ?? "");
+            const s = this.fmtSettings;
+            const titleText = String(s.title.titleText.value ?? "").trim();
+            const showTitle = s.title.showTitle.value === true && titleText !== "";
+            const titlePos  = (s.title.titlePosition.value as { value?: string })?.value || "top-left";
+            const showSymbols = s.content.showSymbols.value !== false;
+            const showLabels  = s.content.showLabels.value !== false;
+            const symA = String(s.content.symbolA.value ?? "");
+            const symB = String(s.content.symbolB.value ?? "");
             const renderKey = [
                 this.items[0].display, this.items[1].display,
                 showTitle ? "T" : "t", showTitle ? titleText : "", showTitle ? titlePos : "",
@@ -333,15 +335,15 @@ export class Visual implements IVisual {
     private renderToggle(): void {
         this.clearRoot();
 
-        const g = this.fmtSettings.general;
-        const titleText = String(g.titleText.value ?? "").trim();
-        const showTitle = g.showTitle.value === true && titleText !== "";
-        const position = (g.titlePosition.value as { value?: string })?.value || "top-left";
+        const s = this.fmtSettings;
+        const titleText = String(s.title.titleText.value ?? "").trim();
+        const showTitle = s.title.showTitle.value === true && titleText !== "";
+        const position = (s.title.titlePosition.value as { value?: string })?.value || "top-left";
         const validPos = Visual.POSITION_CLASSES.indexOf("pos-" + position) >= 0 ? position : "top-left";
-        const showSymbols = g.showSymbols.value !== false;
-        const showLabels  = g.showLabels.value !== false;
-        const symA = String(g.symbolA.value ?? "");
-        const symB = String(g.symbolB.value ?? "");
+        const showSymbols = s.content.showSymbols.value !== false;
+        const showLabels  = s.content.showLabels.value !== false;
+        const symA = String(s.content.symbolA.value ?? "");
+        const symB = String(s.content.symbolB.value ?? "");
 
         if (showTitle) {
             this.root.classList.add("pos-" + validPos);
@@ -452,34 +454,33 @@ export class Visual implements IVisual {
 
     private applyLayout(): void {
         if (!this.toggleEl) return;
-        const g = this.fmtSettings.general;
+        const s = this.fmtSettings;
         const root = this.root;
 
-        // ── Title styling
+        // ── Title
         if (this.titleEl) {
-            this.titleEl.style.color = clr(g.titleColor, "#334155");
-            const titleFs = Math.max(8, Math.min(48, Number(g.titleFontSize.value) || 12));
+            this.titleEl.style.color = clr(s.title.titleColor, "#334155");
+            const titleFs = Math.max(8, Math.min(48, Number(s.title.titleFontSize.value) || 12));
             this.titleEl.style.fontSize = titleFs + "px";
         }
 
-        // ── Track radius / padding
-        const rawRadius = Number(g.cornerRadius.value);
+        // ── Capsule (radius / padding / surface alphas)
+        const rawRadius = Number(s.capsule.cornerRadius.value);
         const radius = !isFinite(rawRadius) || rawRadius < 0 ? 999 : rawRadius;
-        const rawPad  = Number(g.thumbPadding.value);
+        const rawPad  = Number(s.capsule.thumbPadding.value);
         const pad = Math.max(0, isFinite(rawPad) ? rawPad : 3);
         root.style.setProperty("--toggle-radius", radius + "px");
         root.style.setProperty("--toggle-padding", pad + "px");
 
-        // ── Track surface alphas (stored as ×1000 ints, e.g. 40 = 0.040)
-        const topα    = Math.max(0, Math.min(1000, Number(g.trackBgTopAlpha.value) || 0)) / 1000;
-        const botα    = Math.max(0, Math.min(1000, Number(g.trackBgBotAlpha.value) || 0)) / 1000;
-        const borderα = Math.max(0, Math.min(1000, Number(g.trackBorderAlpha.value) || 0)) / 1000;
+        const topα    = Math.max(0, Math.min(1000, Number(s.capsule.trackBgTopAlpha.value) || 0)) / 1000;
+        const botα    = Math.max(0, Math.min(1000, Number(s.capsule.trackBgBotAlpha.value) || 0)) / 1000;
+        const borderα = Math.max(0, Math.min(1000, Number(s.capsule.trackBorderAlpha.value) || 0)) / 1000;
         root.style.setProperty("--toggle-bg-top", `rgba(255,255,255,${topα})`);
         root.style.setProperty("--toggle-bg-bot", `rgba(255,255,255,${botα})`);
         root.style.setProperty("--toggle-border", `rgba(255,255,255,${borderα})`);
 
-        // ── Thumb glow / accent
-        const accentHex = clr(g.thumbGlowColor, "#60A5FA");
+        // ── Thumb (accent + glow)
+        const accentHex = clr(s.thumb.thumbGlowColor, "#60A5FA");
         const accentTriplet = hexToRgbTriplet(accentHex);
         root.style.setProperty("--thumb-glow-color", accentTriplet);
         root.style.setProperty("--symbol-color-active", `rgb(${accentTriplet})`);
@@ -487,25 +488,25 @@ export class Visual implements IVisual {
         root.style.setProperty("--thumb-bg-bot", `rgba(${accentTriplet}, 0.06)`);
         root.style.setProperty("--thumb-border", `rgba(${accentTriplet}, 0.35)`);
 
-        const ringα   = Math.max(0, Math.min(100, Number(g.thumbRingAlpha.value)  || 0)) / 100;
-        const bloomα  = Math.max(0, Math.min(100, Number(g.thumbBloomAlpha.value) || 0)) / 100;
-        const spread  = Math.max(0, Math.min(80, Number(g.thumbGlowSpread.value)  || 14));
-        const hlα     = Math.max(0, Math.min(100, Number(g.thumbHighlightAlpha.value) || 0)) / 100;
+        const ringα  = Math.max(0, Math.min(100, Number(s.thumb.thumbRingAlpha.value)      || 0)) / 100;
+        const bloomα = Math.max(0, Math.min(100, Number(s.thumb.thumbBloomAlpha.value)     || 0)) / 100;
+        const spread = Math.max(0, Math.min(80,  Number(s.thumb.thumbGlowSpread.value)     || 14));
+        const hlα    = Math.max(0, Math.min(100, Number(s.thumb.thumbHighlightAlpha.value) || 0)) / 100;
         root.style.setProperty("--thumb-ring-opacity",  String(ringα));
         root.style.setProperty("--thumb-bloom-opacity", String(bloomα));
-        root.style.setProperty("--thumb-glow-spread", spread + "px");
-        root.style.setProperty("--thumb-inner-hl", `rgba(255,255,255,${hlα})`);
+        root.style.setProperty("--thumb-glow-spread",   spread + "px");
+        root.style.setProperty("--thumb-inner-hl",      `rgba(255,255,255,${hlα})`);
 
         // ── Text
-        root.style.setProperty("--label-active-color", clr(g.labelActiveColor,   "#F1F5F9"));
-        root.style.setProperty("--label-color",         clr(g.labelInactiveColor, "#94A3B8"));
-        const symα = Math.max(0, Math.min(100, Number(g.symbolInactiveAlpha.value) || 0)) / 100;
+        root.style.setProperty("--label-active-color", clr(s.text.labelActiveColor,   "#F1F5F9"));
+        root.style.setProperty("--label-color",        clr(s.text.labelInactiveColor, "#94A3B8"));
+        const symα = Math.max(0, Math.min(100, Number(s.text.symbolInactiveAlpha.value) || 0)) / 100;
         root.style.setProperty("--symbol-opacity-inactive", String(symα));
 
         // ── Animation
-        const dur = Math.max(0, Math.min(5000, Number(g.transitionDuration.value) || 350));
+        const dur = Math.max(0, Math.min(5000, Number(s.animation.transitionDuration.value) || 350));
         root.style.setProperty("--transition-duration", dur + "ms");
-        const ease = (g.transitionEase.value as { value?: string })?.value || "cubic-bezier(.22,.61,.36,1)";
+        const ease = (s.animation.transitionEase.value as { value?: string })?.value || "cubic-bezier(.22,.61,.36,1)";
         root.style.setProperty("--transition-ease", ease);
 
         // ── Sync active classes (handles cross-filter / external selection changes)
