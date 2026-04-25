@@ -21,28 +21,70 @@
     }
   ],
   "objects": {
-    "general": {
-      "displayName": "Toggle",
+    "title": {
+      "displayName": "Title",
       "properties": {
-        "showTitle":     { "displayName": "Show Title",          "type": { "bool": true } },
-        "titleText":     { "displayName": "Title Text",          "type": { "text": true } },
-        "titlePosition": { "displayName": "Title Position",      "type": { "text": true } },
-        "titleColor":    { "displayName": "Title Color",         "type": { "fill": { "solid": { "color": true } } } },
-        "titleFontSize": { "displayName": "Title Font Size",     "type": { "numeric": true } },
-        "sizeMode":     { "displayName": "Size Mode",           "type": { "text": true } },
-        "size":         { "displayName": "Fixed Size (px)",     "type": { "numeric": true } },
-        "cornerRadius": { "displayName": "Corner Radius",       "type": { "numeric": true } },
-        "thumbPadding": { "displayName": "Thumb Padding (px)",  "type": { "numeric": true } },
-        "thumbColorA":     { "displayName": "Thumb Color (A)",            "type": { "fill": { "solid": { "color": true } } } },
-        "thumbColorB":     { "displayName": "Thumb Color (B)",            "type": { "fill": { "solid": { "color": true } } } },
-        "labelColorAOn":   { "displayName": "Value A Label Color (On)",  "type": { "fill": { "solid": { "color": true } } } },
-        "labelColorAOff":  { "displayName": "Value A Label Color (Off)", "type": { "fill": { "solid": { "color": true } } } },
-        "labelColorBOn":   { "displayName": "Value B Label Color (On)",  "type": { "fill": { "solid": { "color": true } } } },
-        "labelColorBOff":  { "displayName": "Value B Label Color (Off)", "type": { "fill": { "solid": { "color": true } } } },
-        "showLabels":   { "displayName": "Show Labels",         "type": { "bool": true } },
-        "labelAlign":   { "displayName": "Label Alignment",     "type": { "text": true } },
-        "showBorder":   { "displayName": "Show Border",         "type": { "bool": true } },
-        "borderColor":  { "displayName": "Border Color",        "type": { "fill": { "solid": { "color": true } } } }
+        "showTitle":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize": { "displayName": "Title Font Size", "type": { "numeric": true } }
+      }
+    },
+    "sizing": {
+      "displayName": "Sizing",
+      "properties": {
+        "sizeMode":    { "displayName": "Size Mode",         "type": { "text": true } },
+        "size":        { "displayName": "Fixed Size (px)",   "type": { "numeric": true } },
+        "textScaling": { "displayName": "Text Scaling (%)",   "type": { "numeric": true } }
+      }
+    },
+    "capsule": {
+      "displayName": "Capsule",
+      "properties": {
+        "cornerRadius":     { "displayName": "Roundness (%)",           "type": { "numeric": true } },
+        "thumbPadding":     { "displayName": "Track Padding (px)",      "type": { "numeric": true } },
+        "trackBgTopAlpha":  { "displayName": "Track Top α (×1000)",    "type": { "numeric": true } },
+        "trackBgBotAlpha":  { "displayName": "Track Bottom α (×1000)", "type": { "numeric": true } },
+        "trackBorderAlpha": { "displayName": "Track Border α (×1000)", "type": { "numeric": true } }
+      }
+    },
+    "content": {
+      "displayName": "Content",
+      "properties": {
+        "showSymbols":    { "displayName": "Show Symbols",            "type": { "bool": true } },
+        "symbolA":        { "displayName": "Symbol A",                "type": { "text": true } },
+        "symbolB":        { "displayName": "Symbol B",                "type": { "text": true } },
+        "symbolFontSize": { "displayName": "Symbol Font Size (px)",   "type": { "numeric": true } },
+        "showLabels":     { "displayName": "Show Labels",             "type": { "bool": true } },
+        "labelFontSize":  { "displayName": "Label Font Size (px)",    "type": { "numeric": true } }
+      }
+    },
+    "text": {
+      "displayName": "Text",
+      "properties": {
+        "labelActiveColor":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } }
+      }
+    },
+    "thumb": {
+      "displayName": "Thumb",
+      "properties": {
+        "thumbGlowColor":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } }
+      }
+    },
+    "animation": {
+      "displayName": "Animation",
+      "properties": {
+        "transitionDuration": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase":     { "displayName": "Transition Easing",        "type": { "text": true } }
       }
     },
     "toolbar": {
