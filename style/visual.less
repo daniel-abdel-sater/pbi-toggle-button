@@ -27,9 +27,6 @@
     --thumb-x: 0px;
     --thumb-w: 0px;
 
-    /* Scale multipliers
-       --tb-scale       drives button padding + gap (capsule chrome size)
-       --tb-text-scale  drives label + symbol font size (decoupled so user can keep text size constant in Fit Container) */
     --tb-scale:        1;
     --tb-text-scale:   1;
     --tb-btn-pad-y:    calc(8px  * var(--tb-scale));
@@ -40,36 +37,90 @@
 
     width: 100%;
     height: 100%;
-    display: grid;
-    grid-template-areas: "toggle";
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
     font-family: "Segoe UI", sans-serif;
     box-sizing: border-box;
     padding: 2px;
     overflow: hidden;
-    column-gap: 6px;
-    row-gap: 2px;
 
     * { box-sizing: border-box; }
 
-    /* ── Title layout variants ───────────────────────────────────── */
-    &.pos-top-left, &.pos-top-center, &.pos-top-right {
+    /* ── Multi-toggle layout container ──────────────────────────── */
+    .tb-toggles-wrap {
+        flex: 1;
+        display: flex;
+        gap: 8px;
+        min-width: 0;
+        min-height: 0;
+    }
+    &.tb-orient-vertical .tb-toggles-wrap {
+        flex-direction: column;
+        align-items: stretch;
+        /* justify-content set inline by JS (orientation alignment) */
+    }
+    /* Vertical stack: every toggle shares the same width as the widest block */
+    &.tb-orient-vertical .tb-toggle {
+        width: 100%;
+    }
+    &.tb-orient-vertical .tb-lbl,
+    &.tb-orient-vertical .tb-sym {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    &.tb-orient-vertical .tb-btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 0;
+    }
+    &.tb-orient-horizontal .tb-toggles-wrap {
+        flex-direction: row;
+        align-items: stretch;
+        /* justify-content set inline by JS (orientation alignment) */
+    }
+    /* Horizontal row: every toggle pill matches the tallest sibling's height.
+       The flex-row above stretches blocks vertically; these rules propagate
+       that height down through the grid cell to the pill itself. */
+    &.tb-orient-horizontal .tb-wrap {
+        align-items: stretch;
+    }
+    &.tb-orient-horizontal .tb-toggle {
+        height: 100%;
+    }
+    /* Fixed mode: blocks take natural size so leftover space can be aligned over.
+       Fit mode keeps flex:1 so blocks fill the container. */
+    &:not(.tb-fit) .tb-block { flex: 0 0 auto; }
+
+    /* ── Per-toggle block: holds title + .tb-wrap with title-position grid ── */
+    .tb-block {
+        flex: 1;
+        display: grid;
+        grid-template-areas: "toggle";
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+        column-gap: 6px;
+        row-gap: 2px;
+        min-width: 0;
+        min-height: 0;
+    }
+    .tb-block.pos-top-left, .tb-block.pos-top-center, .tb-block.pos-top-right {
         grid-template-areas: "title" "toggle";
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
     }
-    &.pos-bottom-left, &.pos-bottom-center, &.pos-bottom-right {
+    .tb-block.pos-bottom-left, .tb-block.pos-bottom-center, .tb-block.pos-bottom-right {
         grid-template-areas: "toggle" "title";
         grid-template-columns: 1fr;
         grid-template-rows: 1fr auto;
     }
-    &.pos-left {
+    .tb-block.pos-left {
         grid-template-areas: "title toggle";
         grid-template-columns: auto 1fr;
         grid-template-rows: 1fr;
     }
-    &.pos-right {
+    .tb-block.pos-right {
         grid-template-areas: "toggle title";
         grid-template-columns: 1fr auto;
         grid-template-rows: 1fr;
@@ -84,9 +135,9 @@
         text-overflow: ellipsis;
         align-self: center;
     }
-    &.pos-top-left    .tb-title, &.pos-bottom-left    .tb-title { text-align: left;   }
-    &.pos-top-center  .tb-title, &.pos-bottom-center  .tb-title { text-align: center; }
-    &.pos-top-right   .tb-title, &.pos-bottom-right   .tb-title { text-align: right;  }
+    .tb-block.pos-top-left    .tb-title, .tb-block.pos-bottom-left    .tb-title { text-align: left;   }
+    .tb-block.pos-top-center  .tb-title, .tb-block.pos-bottom-center  .tb-title { text-align: center; }
+    .tb-block.pos-top-right   .tb-title, .tb-block.pos-bottom-right   .tb-title { text-align: right;  }
 
     .tb-wrap {
         grid-area: toggle;
@@ -97,7 +148,7 @@
         min-height: 0;
     }
 
-    /* ── Fit-container mode: toggle stretches to fill both dims ──── */
+    /* ── Fit-container mode: toggle stretches to fill its block's wrap cell ── */
     &.tb-fit .tb-toggle {
         width: 100%;
         height: 100%;
@@ -214,6 +265,7 @@
         text-align: center;
         padding: 24px;
         max-width: 320px;
+        margin: auto;
 
         .tb-landing-title {
             font-size: 14px;

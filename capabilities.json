@@ -4,13 +4,13 @@
       "displayName": "Field",
       "name": "field",
       "kind": "Grouping",
-      "description": "A column with exactly 2 distinct values. The toggle will switch between them."
+      "description": "Up to 5 columns. Each column with exactly 2 distinct values produces its own toggle. Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
     }
   ],
   "dataViewMappings": [
     {
       "conditions": [
-        { "field": { "max": 1 } }
+        { "field": { "max": 5 } }
       ],
       "categorical": {
         "categories": {
@@ -24,11 +24,44 @@
     "title": {
       "displayName": "Title",
       "properties": {
+        "view":           { "displayName": "Apply to",                "type": { "text": true } },
+        "titleIndexMap":  { "displayName": "Slot Map (internal)",     "type": { "text": true } },
+
         "showTitle":     { "displayName": "Show Title",      "type": { "bool": true } },
         "titleText":     { "displayName": "Title Text",      "type": { "text": true } },
         "titlePosition": { "displayName": "Title Position",  "type": { "text": true } },
         "titleColor":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
-        "titleFontSize": { "displayName": "Title Font Size", "type": { "numeric": true } }
+        "titleFontSize": { "displayName": "Title Font Size", "type": { "numeric": true } },
+
+        "showTitle_0":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText_0":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition_0": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor_0":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize_0": { "displayName": "Title Font Size", "type": { "numeric": true } },
+
+        "showTitle_1":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText_1":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition_1": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor_1":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize_1": { "displayName": "Title Font Size", "type": { "numeric": true } },
+
+        "showTitle_2":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText_2":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition_2": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor_2":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize_2": { "displayName": "Title Font Size", "type": { "numeric": true } },
+
+        "showTitle_3":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText_3":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition_3": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor_3":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize_3": { "displayName": "Title Font Size", "type": { "numeric": true } },
+
+        "showTitle_4":     { "displayName": "Show Title",      "type": { "bool": true } },
+        "titleText_4":     { "displayName": "Title Text",      "type": { "text": true } },
+        "titlePosition_4": { "displayName": "Title Position",  "type": { "text": true } },
+        "titleColor_4":    { "displayName": "Title Color",     "type": { "fill": { "solid": { "color": true } } } },
+        "titleFontSize_4": { "displayName": "Title Font Size", "type": { "numeric": true } }
       }
     },
     "sizing": {
@@ -52,32 +85,136 @@
     "content": {
       "displayName": "Content",
       "properties": {
+        "view":             { "displayName": "Apply to",              "type": { "text": true } },
+        "contentIndexMap":  { "displayName": "Slot Map (internal)",   "type": { "text": true } },
+
         "showSymbols":    { "displayName": "Show Symbols",            "type": { "bool": true } },
         "symbolA":        { "displayName": "Symbol A",                "type": { "text": true } },
         "symbolB":        { "displayName": "Symbol B",                "type": { "text": true } },
         "symbolFontSize": { "displayName": "Symbol Font Size (px)",   "type": { "numeric": true } },
         "showLabels":     { "displayName": "Show Labels",             "type": { "bool": true } },
-        "labelFontSize":  { "displayName": "Label Font Size (px)",    "type": { "numeric": true } }
+        "labelFontSize":  { "displayName": "Label Font Size (px)",    "type": { "numeric": true } },
+
+        "showSymbols_0":    { "displayName": "Show Symbols",          "type": { "bool": true } },
+        "symbolA_0":        { "displayName": "Symbol A",              "type": { "text": true } },
+        "symbolB_0":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolFontSize_0": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
+        "showLabels_0":     { "displayName": "Show Labels",           "type": { "bool": true } },
+        "labelFontSize_0":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
+
+        "showSymbols_1":    { "displayName": "Show Symbols",          "type": { "bool": true } },
+        "symbolA_1":        { "displayName": "Symbol A",              "type": { "text": true } },
+        "symbolB_1":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolFontSize_1": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
+        "showLabels_1":     { "displayName": "Show Labels",           "type": { "bool": true } },
+        "labelFontSize_1":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
+
+        "showSymbols_2":    { "displayName": "Show Symbols",          "type": { "bool": true } },
+        "symbolA_2":        { "displayName": "Symbol A",              "type": { "text": true } },
+        "symbolB_2":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolFontSize_2": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
+        "showLabels_2":     { "displayName": "Show Labels",           "type": { "bool": true } },
+        "labelFontSize_2":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
+
+        "showSymbols_3":    { "displayName": "Show Symbols",          "type": { "bool": true } },
+        "symbolA_3":        { "displayName": "Symbol A",              "type": { "text": true } },
+        "symbolB_3":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolFontSize_3": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
+        "showLabels_3":     { "displayName": "Show Labels",           "type": { "bool": true } },
+        "labelFontSize_3":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
+
+        "showSymbols_4":    { "displayName": "Show Symbols",          "type": { "bool": true } },
+        "symbolA_4":        { "displayName": "Symbol A",              "type": { "text": true } },
+        "symbolB_4":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolFontSize_4": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
+        "showLabels_4":     { "displayName": "Show Labels",           "type": { "bool": true } },
+        "labelFontSize_4":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } }
       }
     },
     "text": {
       "displayName": "Text",
       "properties": {
+        "view":          { "displayName": "Apply to",            "type": { "text": true } },
+        "textIndexMap":  { "displayName": "Slot Map (internal)", "type": { "text": true } },
+
         "labelActiveColor":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
         "labelInactiveColor":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
         "symbolActiveColor":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
         "symbolInactiveColor": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveAlpha": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } }
+        "symbolInactiveAlpha": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
+
+        "labelActiveColor_0":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor_0":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor_0":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor_0": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha_0": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
+
+        "labelActiveColor_1":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor_1":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor_1":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor_1": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha_1": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
+
+        "labelActiveColor_2":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor_2":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor_2":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor_2": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha_2": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
+
+        "labelActiveColor_3":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor_3":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor_3":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor_3": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha_3": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
+
+        "labelActiveColor_4":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
+        "labelInactiveColor_4":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
+        "symbolActiveColor_4":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveColor_4": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "symbolInactiveAlpha_4": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } }
       }
     },
     "thumb": {
       "displayName": "Thumb",
       "properties": {
+        "view":          { "displayName": "Apply to",            "type": { "text": true } },
+        "thumbIndexMap": { "displayName": "Slot Map (internal)", "type": { "text": true } },
+
         "thumbGlowColor":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
         "thumbRingAlpha":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
-        "thumbHighlightAlpha": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } }
+        "thumbHighlightAlpha": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
+
+        "thumbGlowColor_0":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha_0":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha_0":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread_0":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha_0": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
+
+        "thumbGlowColor_1":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha_1":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha_1":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread_1":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha_1": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
+
+        "thumbGlowColor_2":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha_2":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha_2":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread_2":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha_2": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
+
+        "thumbGlowColor_3":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha_3":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha_3":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread_3":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha_3": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
+
+        "thumbGlowColor_4":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbRingAlpha_4":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
+        "thumbBloomAlpha_4":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
+        "thumbGlowSpread_4":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
+        "thumbHighlightAlpha_4": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } }
       }
     },
     "animation": {
@@ -87,10 +224,19 @@
         "transitionEase":     { "displayName": "Transition Easing",        "type": { "text": true } }
       }
     },
+    "orientation": {
+      "displayName": "Orientation",
+      "properties": {
+        "mode":            { "displayName": "Layout Direction",   "type": { "text": true } },
+        "verticalAlign":   { "displayName": "Vertical Alignment", "type": { "text": true } },
+        "horizontalAlign": { "displayName": "Horizontal Alignment", "type": { "text": true } }
+      }
+    },
     "toolbar": {
       "displayName": "Runtime State",
       "properties": {
-        "selectedValue": { "displayName": "Selected Value", "type": { "text": true } }
+        "selectedValue":  { "displayName": "Selected Value (legacy single-toggle)", "type": { "text": true } },
+        "selectedValues": { "displayName": "Selected Values (JSON map per queryName)", "type": { "text": true } }
       }
     }
   },

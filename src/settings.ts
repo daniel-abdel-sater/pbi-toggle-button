@@ -5,7 +5,35 @@ import FormattingSettingsCard = formattingSettings.SimpleCard;
 import FormattingSettingsModel = formattingSettings.Model;
 
 // ── Title ────────────────────────────────────────────────────────────
+// Apply-to dropdown pattern: "all" (defaults applied to every toggle) or
+// "toggle:<queryName>" (overrides applied only to that toggle's slot).
+// Slot indices stored in titleIndexMap so settings follow the field across rebindings.
+const TITLE_POSITION_ITEMS = [
+    { value: "top-left",      displayName: "Top Left" },
+    { value: "top-center",    displayName: "Top Center" },
+    { value: "top-right",     displayName: "Top Right" },
+    { value: "left",          displayName: "Left" },
+    { value: "right",         displayName: "Right" },
+    { value: "bottom-left",   displayName: "Bottom Left" },
+    { value: "bottom-center", displayName: "Bottom Center" },
+    { value: "bottom-right",  displayName: "Bottom Right" }
+];
+
 class TitleCard extends FormattingSettingsCard {
+    // ── Apply-to switcher (items rebuilt at runtime in visual.ts to include bound queryNames)
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles: edits below apply as defaults to every toggle. Pick a specific toggle to override its title settings independently.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    titleIndexMap = new formattingSettings.TextInput({
+        name: "titleIndexMap", displayName: "Slot Map (internal)",
+        description: "Internal — tracks which slot each field uses so overrides survive field reordering. Hidden in the format pane.",
+        value: "", placeholder: ""
+    });
+
+    // ── "All" defaults (visible when view = "all")
     showTitle = new formattingSettings.ToggleSwitch({
         name: "showTitle", displayName: "Show Title",
         description: "Show or hide a text label next to the toggle (e.g. 'Currency').",
@@ -18,18 +46,9 @@ class TitleCard extends FormattingSettingsCard {
     });
     titlePosition = new formattingSettings.ItemDropdown({
         name: "titlePosition", displayName: "Title Position",
-        description: "Where to place the title relative to the toggle. Left/right put it on the same row; top/bottom stack vertically.",
+        description: "Where to place the title relative to the toggle.",
         value: { value: "left", displayName: "Left" },
-        items: [
-            { value: "top-left",      displayName: "Top Left" },
-            { value: "top-center",    displayName: "Top Center" },
-            { value: "top-right",     displayName: "Top Right" },
-            { value: "left",          displayName: "Left" },
-            { value: "right",         displayName: "Right" },
-            { value: "bottom-left",   displayName: "Bottom Left" },
-            { value: "bottom-center", displayName: "Bottom Center" },
-            { value: "bottom-right",  displayName: "Bottom Right" }
-        ]
+        items: TITLE_POSITION_ITEMS
     });
     titleColor = new formattingSettings.ColorPicker({
         name: "titleColor", displayName: "Title Color",
@@ -42,10 +61,49 @@ class TitleCard extends FormattingSettingsCard {
         value: 16
     });
 
+    // ── Slot 0 (visible when view = "toggle:<qn>" and indexMap[qn] = 0)
+    showTitle_0     = new formattingSettings.ToggleSwitch({ name: "showTitle_0",     displayName: "Show Title",      value: true });
+    titleText_0     = new formattingSettings.TextInput   ({ name: "titleText_0",     displayName: "Title Text",      value: "", placeholder: "Override (leave empty to inherit)" });
+    titlePosition_0 = new formattingSettings.ItemDropdown({ name: "titlePosition_0", displayName: "Title Position",  value: { value: "left", displayName: "Left" }, items: TITLE_POSITION_ITEMS });
+    titleColor_0    = new formattingSettings.ColorPicker ({ name: "titleColor_0",    displayName: "Title Color",     value: { value: "#334155" } });
+    titleFontSize_0 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_0", displayName: "Title Font Size", value: 16 });
+
+    showTitle_1     = new formattingSettings.ToggleSwitch({ name: "showTitle_1",     displayName: "Show Title",      value: true });
+    titleText_1     = new formattingSettings.TextInput   ({ name: "titleText_1",     displayName: "Title Text",      value: "", placeholder: "Override (leave empty to inherit)" });
+    titlePosition_1 = new formattingSettings.ItemDropdown({ name: "titlePosition_1", displayName: "Title Position",  value: { value: "left", displayName: "Left" }, items: TITLE_POSITION_ITEMS });
+    titleColor_1    = new formattingSettings.ColorPicker ({ name: "titleColor_1",    displayName: "Title Color",     value: { value: "#334155" } });
+    titleFontSize_1 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_1", displayName: "Title Font Size", value: 16 });
+
+    showTitle_2     = new formattingSettings.ToggleSwitch({ name: "showTitle_2",     displayName: "Show Title",      value: true });
+    titleText_2     = new formattingSettings.TextInput   ({ name: "titleText_2",     displayName: "Title Text",      value: "", placeholder: "Override (leave empty to inherit)" });
+    titlePosition_2 = new formattingSettings.ItemDropdown({ name: "titlePosition_2", displayName: "Title Position",  value: { value: "left", displayName: "Left" }, items: TITLE_POSITION_ITEMS });
+    titleColor_2    = new formattingSettings.ColorPicker ({ name: "titleColor_2",    displayName: "Title Color",     value: { value: "#334155" } });
+    titleFontSize_2 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_2", displayName: "Title Font Size", value: 16 });
+
+    showTitle_3     = new formattingSettings.ToggleSwitch({ name: "showTitle_3",     displayName: "Show Title",      value: true });
+    titleText_3     = new formattingSettings.TextInput   ({ name: "titleText_3",     displayName: "Title Text",      value: "", placeholder: "Override (leave empty to inherit)" });
+    titlePosition_3 = new formattingSettings.ItemDropdown({ name: "titlePosition_3", displayName: "Title Position",  value: { value: "left", displayName: "Left" }, items: TITLE_POSITION_ITEMS });
+    titleColor_3    = new formattingSettings.ColorPicker ({ name: "titleColor_3",    displayName: "Title Color",     value: { value: "#334155" } });
+    titleFontSize_3 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_3", displayName: "Title Font Size", value: 16 });
+
+    showTitle_4     = new formattingSettings.ToggleSwitch({ name: "showTitle_4",     displayName: "Show Title",      value: true });
+    titleText_4     = new formattingSettings.TextInput   ({ name: "titleText_4",     displayName: "Title Text",      value: "", placeholder: "Override (leave empty to inherit)" });
+    titlePosition_4 = new formattingSettings.ItemDropdown({ name: "titlePosition_4", displayName: "Title Position",  value: { value: "left", displayName: "Left" }, items: TITLE_POSITION_ITEMS });
+    titleColor_4    = new formattingSettings.ColorPicker ({ name: "titleColor_4",    displayName: "Title Color",     value: { value: "#334155" } });
+    titleFontSize_4 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_4", displayName: "Title Font Size", value: 16 });
+
     name: string = "title";
     displayName: string = "Title";
     slices: formattingSettings.Slice[] = [
-        this.showTitle, this.titleText, this.titlePosition, this.titleColor, this.titleFontSize
+        this.view, this.titleIndexMap,
+        // "all" defaults
+        this.showTitle, this.titleText, this.titlePosition, this.titleColor, this.titleFontSize,
+        // slots 0..4
+        this.showTitle_0, this.titleText_0, this.titlePosition_0, this.titleColor_0, this.titleFontSize_0,
+        this.showTitle_1, this.titleText_1, this.titlePosition_1, this.titleColor_1, this.titleFontSize_1,
+        this.showTitle_2, this.titleText_2, this.titlePosition_2, this.titleColor_2, this.titleFontSize_2,
+        this.showTitle_3, this.titleText_3, this.titlePosition_3, this.titleColor_3, this.titleFontSize_3,
+        this.showTitle_4, this.titleText_4, this.titlePosition_4, this.titleColor_4, this.titleFontSize_4
     ];
 }
 
@@ -114,6 +172,18 @@ class CapsuleCard extends FormattingSettingsCard {
 
 // ── Content (symbols + label visibility) ────────────────────────────
 class ContentCard extends FormattingSettingsCard {
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles: edits below apply as defaults to every toggle. Pick a specific toggle to override its content settings independently.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    contentIndexMap = new formattingSettings.TextInput({
+        name: "contentIndexMap", displayName: "Slot Map (internal)",
+        description: "Internal — tracks which slot each field uses so overrides survive field reordering.",
+        value: "", placeholder: ""
+    });
+
     showSymbols = new formattingSettings.ToggleSwitch({
         name: "showSymbols", displayName: "Show Symbols",
         description: "Show or hide the small mono-font character (e.g. '$', 'D') displayed before each label.",
@@ -131,7 +201,7 @@ class ContentCard extends FormattingSettingsCard {
     });
     symbolFontSize = new formattingSettings.NumUpDown({
         name: "symbolFontSize", displayName: "Symbol Font Size (px)",
-        description: "Symbol text size in pixels. Still multiplied by Sizing > Scale (%) and by the container scale in Fit Container mode.",
+        description: "Symbol text size in pixels. Still multiplied by Sizing scale.",
         value: 12
     });
     showLabels = new formattingSettings.ToggleSwitch({
@@ -141,21 +211,69 @@ class ContentCard extends FormattingSettingsCard {
     });
     labelFontSize = new formattingSettings.NumUpDown({
         name: "labelFontSize", displayName: "Label Font Size (px)",
-        description: "Label text size in pixels. Still multiplied by Sizing > Scale (%) and by the container scale in Fit Container mode.",
+        description: "Label text size in pixels. Still multiplied by Sizing scale.",
         value: 12
     });
+
+    showSymbols_0    = new formattingSettings.ToggleSwitch({ name: "showSymbols_0",    displayName: "Show Symbols", value: true });
+    symbolA_0        = new formattingSettings.TextInput   ({ name: "symbolA_0",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolB_0        = new formattingSettings.TextInput   ({ name: "symbolB_0",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolFontSize_0 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_0", displayName: "Symbol Font Size (px)", value: 12 });
+    showLabels_0     = new formattingSettings.ToggleSwitch({ name: "showLabels_0",     displayName: "Show Labels", value: true });
+    labelFontSize_0  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_0",  displayName: "Label Font Size (px)", value: 12 });
+
+    showSymbols_1    = new formattingSettings.ToggleSwitch({ name: "showSymbols_1",    displayName: "Show Symbols", value: true });
+    symbolA_1        = new formattingSettings.TextInput   ({ name: "symbolA_1",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolB_1        = new formattingSettings.TextInput   ({ name: "symbolB_1",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolFontSize_1 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_1", displayName: "Symbol Font Size (px)", value: 12 });
+    showLabels_1     = new formattingSettings.ToggleSwitch({ name: "showLabels_1",     displayName: "Show Labels", value: true });
+    labelFontSize_1  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_1",  displayName: "Label Font Size (px)", value: 12 });
+
+    showSymbols_2    = new formattingSettings.ToggleSwitch({ name: "showSymbols_2",    displayName: "Show Symbols", value: true });
+    symbolA_2        = new formattingSettings.TextInput   ({ name: "symbolA_2",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolB_2        = new formattingSettings.TextInput   ({ name: "symbolB_2",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolFontSize_2 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_2", displayName: "Symbol Font Size (px)", value: 12 });
+    showLabels_2     = new formattingSettings.ToggleSwitch({ name: "showLabels_2",     displayName: "Show Labels", value: true });
+    labelFontSize_2  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_2",  displayName: "Label Font Size (px)", value: 12 });
+
+    showSymbols_3    = new formattingSettings.ToggleSwitch({ name: "showSymbols_3",    displayName: "Show Symbols", value: true });
+    symbolA_3        = new formattingSettings.TextInput   ({ name: "symbolA_3",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolB_3        = new formattingSettings.TextInput   ({ name: "symbolB_3",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolFontSize_3 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_3", displayName: "Symbol Font Size (px)", value: 12 });
+    showLabels_3     = new formattingSettings.ToggleSwitch({ name: "showLabels_3",     displayName: "Show Labels", value: true });
+    labelFontSize_3  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_3",  displayName: "Label Font Size (px)", value: 12 });
+
+    showSymbols_4    = new formattingSettings.ToggleSwitch({ name: "showSymbols_4",    displayName: "Show Symbols", value: true });
+    symbolA_4        = new formattingSettings.TextInput   ({ name: "symbolA_4",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolB_4        = new formattingSettings.TextInput   ({ name: "symbolB_4",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolFontSize_4 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_4", displayName: "Symbol Font Size (px)", value: 12 });
+    showLabels_4     = new formattingSettings.ToggleSwitch({ name: "showLabels_4",     displayName: "Show Labels", value: true });
+    labelFontSize_4  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_4",  displayName: "Label Font Size (px)", value: 12 });
 
     name: string = "content";
     displayName: string = "Content";
     slices: formattingSettings.Slice[] = [
-        this.showSymbols, this.symbolA, this.symbolB,
-        this.symbolFontSize,
-        this.showLabels, this.labelFontSize
+        this.view, this.contentIndexMap,
+        this.showSymbols, this.symbolA, this.symbolB, this.symbolFontSize, this.showLabels, this.labelFontSize,
+        this.showSymbols_0, this.symbolA_0, this.symbolB_0, this.symbolFontSize_0, this.showLabels_0, this.labelFontSize_0,
+        this.showSymbols_1, this.symbolA_1, this.symbolB_1, this.symbolFontSize_1, this.showLabels_1, this.labelFontSize_1,
+        this.showSymbols_2, this.symbolA_2, this.symbolB_2, this.symbolFontSize_2, this.showLabels_2, this.labelFontSize_2,
+        this.showSymbols_3, this.symbolA_3, this.symbolB_3, this.symbolFontSize_3, this.showLabels_3, this.labelFontSize_3,
+        this.showSymbols_4, this.symbolA_4, this.symbolB_4, this.symbolFontSize_4, this.showLabels_4, this.labelFontSize_4
     ];
 }
 
 // ── Text (typography colours) ───────────────────────────────────────
 class TextCard extends FormattingSettingsCard {
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles or per-toggle override.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    textIndexMap = new formattingSettings.TextInput({
+        name: "textIndexMap", displayName: "Slot Map (internal)", value: "", placeholder: ""
+    });
     labelActiveColor = new formattingSettings.ColorPicker({
         name: "labelActiveColor", displayName: "Label Color (Active)",
         description: "Color of the label on the currently selected side.",
@@ -182,16 +300,60 @@ class TextCard extends FormattingSettingsCard {
         value: 55
     });
 
+    labelActiveColor_0    = new formattingSettings.ColorPicker({ name: "labelActiveColor_0",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
+    labelInactiveColor_0  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_0",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
+    symbolActiveColor_0   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_0",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
+    symbolInactiveColor_0 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_0", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    symbolInactiveAlpha_0 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_0", displayName: "Inactive Symbol α (×100)", value: 55 });
+
+    labelActiveColor_1    = new formattingSettings.ColorPicker({ name: "labelActiveColor_1",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
+    labelInactiveColor_1  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_1",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
+    symbolActiveColor_1   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_1",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
+    symbolInactiveColor_1 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_1", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    symbolInactiveAlpha_1 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_1", displayName: "Inactive Symbol α (×100)", value: 55 });
+
+    labelActiveColor_2    = new formattingSettings.ColorPicker({ name: "labelActiveColor_2",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
+    labelInactiveColor_2  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_2",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
+    symbolActiveColor_2   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_2",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
+    symbolInactiveColor_2 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_2", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    symbolInactiveAlpha_2 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_2", displayName: "Inactive Symbol α (×100)", value: 55 });
+
+    labelActiveColor_3    = new formattingSettings.ColorPicker({ name: "labelActiveColor_3",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
+    labelInactiveColor_3  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_3",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
+    symbolActiveColor_3   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_3",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
+    symbolInactiveColor_3 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_3", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    symbolInactiveAlpha_3 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_3", displayName: "Inactive Symbol α (×100)", value: 55 });
+
+    labelActiveColor_4    = new formattingSettings.ColorPicker({ name: "labelActiveColor_4",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
+    labelInactiveColor_4  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_4",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
+    symbolActiveColor_4   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_4",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
+    symbolInactiveColor_4 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_4", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    symbolInactiveAlpha_4 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_4", displayName: "Inactive Symbol α (×100)", value: 55 });
+
     name: string = "text";
     displayName: string = "Text";
     slices: formattingSettings.Slice[] = [
-        this.labelActiveColor, this.labelInactiveColor,
-        this.symbolActiveColor, this.symbolInactiveColor, this.symbolInactiveAlpha
+        this.view, this.textIndexMap,
+        this.labelActiveColor, this.labelInactiveColor, this.symbolActiveColor, this.symbolInactiveColor, this.symbolInactiveAlpha,
+        this.labelActiveColor_0, this.labelInactiveColor_0, this.symbolActiveColor_0, this.symbolInactiveColor_0, this.symbolInactiveAlpha_0,
+        this.labelActiveColor_1, this.labelInactiveColor_1, this.symbolActiveColor_1, this.symbolInactiveColor_1, this.symbolInactiveAlpha_1,
+        this.labelActiveColor_2, this.labelInactiveColor_2, this.symbolActiveColor_2, this.symbolInactiveColor_2, this.symbolInactiveAlpha_2,
+        this.labelActiveColor_3, this.labelInactiveColor_3, this.symbolActiveColor_3, this.symbolInactiveColor_3, this.symbolInactiveAlpha_3,
+        this.labelActiveColor_4, this.labelInactiveColor_4, this.symbolActiveColor_4, this.symbolInactiveColor_4, this.symbolInactiveAlpha_4
     ];
 }
 
 // ── Thumb (accent + glow) ───────────────────────────────────────────
 class ThumbCard extends FormattingSettingsCard {
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles or per-toggle override.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    thumbIndexMap = new formattingSettings.TextInput({
+        name: "thumbIndexMap", displayName: "Slot Map (internal)", value: "", placeholder: ""
+    });
     thumbGlowColor = new formattingSettings.ColorPicker({
         name: "thumbGlowColor", displayName: "Accent Color",
         description: "Drives the thumb's tinted gradient, the active symbol color, and the glow ring + bloom hue. The dominant brand color of the visual.",
@@ -218,11 +380,46 @@ class ThumbCard extends FormattingSettingsCard {
         value: 18
     });
 
+    thumbGlowColor_0      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_0",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbRingAlpha_0      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_0",      displayName: "Ring α (×100)",           value: 18 });
+    thumbBloomAlpha_0     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_0",     displayName: "Bloom α (×100)",          value: 45 });
+    thumbGlowSpread_0     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_0",     displayName: "Bloom Spread (px)",        value: 14 });
+    thumbHighlightAlpha_0 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_0", displayName: "Inner Highlight α (×100)", value: 18 });
+
+    thumbGlowColor_1      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_1",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbRingAlpha_1      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_1",      displayName: "Ring α (×100)",           value: 18 });
+    thumbBloomAlpha_1     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_1",     displayName: "Bloom α (×100)",          value: 45 });
+    thumbGlowSpread_1     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_1",     displayName: "Bloom Spread (px)",        value: 14 });
+    thumbHighlightAlpha_1 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_1", displayName: "Inner Highlight α (×100)", value: 18 });
+
+    thumbGlowColor_2      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_2",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbRingAlpha_2      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_2",      displayName: "Ring α (×100)",           value: 18 });
+    thumbBloomAlpha_2     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_2",     displayName: "Bloom α (×100)",          value: 45 });
+    thumbGlowSpread_2     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_2",     displayName: "Bloom Spread (px)",        value: 14 });
+    thumbHighlightAlpha_2 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_2", displayName: "Inner Highlight α (×100)", value: 18 });
+
+    thumbGlowColor_3      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_3",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbRingAlpha_3      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_3",      displayName: "Ring α (×100)",           value: 18 });
+    thumbBloomAlpha_3     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_3",     displayName: "Bloom α (×100)",          value: 45 });
+    thumbGlowSpread_3     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_3",     displayName: "Bloom Spread (px)",        value: 14 });
+    thumbHighlightAlpha_3 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_3", displayName: "Inner Highlight α (×100)", value: 18 });
+
+    thumbGlowColor_4      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_4",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbRingAlpha_4      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_4",      displayName: "Ring α (×100)",           value: 18 });
+    thumbBloomAlpha_4     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_4",     displayName: "Bloom α (×100)",          value: 45 });
+    thumbGlowSpread_4     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_4",     displayName: "Bloom Spread (px)",        value: 14 });
+    thumbHighlightAlpha_4 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_4", displayName: "Inner Highlight α (×100)", value: 18 });
+
     name: string = "thumb";
     displayName: string = "Thumb";
     slices: formattingSettings.Slice[] = [
-        this.thumbGlowColor, this.thumbRingAlpha, this.thumbBloomAlpha,
-        this.thumbGlowSpread, this.thumbHighlightAlpha
+        this.view, this.thumbIndexMap,
+        this.thumbGlowColor, this.thumbRingAlpha, this.thumbBloomAlpha, this.thumbGlowSpread, this.thumbHighlightAlpha,
+        this.thumbGlowColor_0, this.thumbRingAlpha_0, this.thumbBloomAlpha_0, this.thumbGlowSpread_0, this.thumbHighlightAlpha_0,
+        this.thumbGlowColor_1, this.thumbRingAlpha_1, this.thumbBloomAlpha_1, this.thumbGlowSpread_1, this.thumbHighlightAlpha_1,
+        this.thumbGlowColor_2, this.thumbRingAlpha_2, this.thumbBloomAlpha_2, this.thumbGlowSpread_2, this.thumbHighlightAlpha_2,
+        this.thumbGlowColor_3, this.thumbRingAlpha_3, this.thumbBloomAlpha_3, this.thumbGlowSpread_3, this.thumbHighlightAlpha_3,
+        this.thumbGlowColor_4, this.thumbRingAlpha_4, this.thumbBloomAlpha_4, this.thumbGlowSpread_4, this.thumbHighlightAlpha_4
     ];
 }
 
@@ -251,17 +448,56 @@ class AnimationCard extends FormattingSettingsCard {
     slices: formattingSettings.Slice[] = [this.transitionDuration, this.transitionEase];
 }
 
+// ── Orientation ─────────────────────────────────────────────────────
+class OrientationCard extends FormattingSettingsCard {
+    mode = new formattingSettings.ItemDropdown({
+        name: "mode", displayName: "Layout Direction",
+        description: "How multiple toggles arrange when more than one field is bound. Auto = vertical when any title is positioned left/right, horizontal otherwise. Vertical/Horizontal force the chosen direction.",
+        value: { value: "auto", displayName: "Auto" },
+        items: [
+            { value: "auto",       displayName: "Auto" },
+            { value: "vertical",   displayName: "Vertical" },
+            { value: "horizontal", displayName: "Horizontal" }
+        ]
+    });
+    verticalAlign = new formattingSettings.ItemDropdown({
+        name: "verticalAlign", displayName: "Vertical Alignment",
+        description: "Where the vertical toggle stack sits along the vertical axis when there's leftover space. Only used when Sizing > Size Mode = Fixed and the resolved layout direction is Vertical.",
+        value: { value: "center", displayName: "Center" },
+        items: [
+            { value: "top",    displayName: "Top" },
+            { value: "center", displayName: "Center" },
+            { value: "bottom", displayName: "Bottom" }
+        ]
+    });
+    horizontalAlign = new formattingSettings.ItemDropdown({
+        name: "horizontalAlign", displayName: "Horizontal Alignment",
+        description: "Where the horizontal toggle row sits along the horizontal axis when there's leftover space. Only used when Sizing > Size Mode = Fixed and the resolved layout direction is Horizontal.",
+        value: { value: "center", displayName: "Center" },
+        items: [
+            { value: "left",   displayName: "Left" },
+            { value: "center", displayName: "Center" },
+            { value: "right",  displayName: "Right" }
+        ]
+    });
+
+    name: string = "orientation";
+    displayName: string = "Orientation";
+    slices: formattingSettings.Slice[] = [this.mode, this.verticalAlign, this.horizontalAlign];
+}
+
 // ── Model ───────────────────────────────────────────────────────────
 export class ToggleFormattingModel extends FormattingSettingsModel {
-    title     = new TitleCard();
-    sizing    = new SizingCard();
-    capsule   = new CapsuleCard();
-    content   = new ContentCard();
-    text      = new TextCard();
-    thumb     = new ThumbCard();
-    animation = new AnimationCard();
+    title       = new TitleCard();
+    sizing      = new SizingCard();
+    capsule     = new CapsuleCard();
+    content     = new ContentCard();
+    text        = new TextCard();
+    thumb       = new ThumbCard();
+    animation   = new AnimationCard();
+    orientation = new OrientationCard();
     cards: formattingSettings.Cards[] = [
-        this.title, this.sizing, this.capsule, this.content, this.text, this.thumb, this.animation
+        this.title, this.sizing, this.capsule, this.content, this.text, this.thumb, this.animation, this.orientation
     ];
 }
 

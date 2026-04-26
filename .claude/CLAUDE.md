@@ -60,3 +60,22 @@ pbiviz.json          — API 5.11.0
 **Impact:** Eliminates the update loop for any number of instances on the same page, independent of whether they're bound to the same or different fields. Also reduces update cost since we don't rebuild `items` on every viewport/resize update.
 
 ---
+
+### Click reverts on multi-field bind: cross-product cat identity false-positive
+[retry-lesson] [date: 2026-04-26]
+
+**Context:** With 2+ fields bound, clicking a toggle would set `selectedValue = B`, run `commitSelections()` (correctly building a fresh selectionId at the right idx), but the post-`select()` `update()` would silently revert `selectedValue` back to `A`. UI snapped back to the original side. With 3 fields, this happened on the FIRST click; with 2 fields, it took a few cycles to surface (the third A→B switch).
+
+**First attempt that failed (commit aa6f08e):** Rebuilt fresh selectionIds in `commitSelections()` to fix an unrelated `expr is undefined` error. This regressed the multi-instance loop fix because cached `items[]` selectionIds (from the previous fix) no longer reference-matched what the host echoed back through `getSelectionIds()`.
+
+**Second attempt that failed:** Always rebuilt fresh `items[]` per update, hoping fresh-vs-fresh `.equals()` would compare correctly. Worked for 2 fields but broke immediately on 3 fields.
+
+**Root cause:** Single `categorical.categories.for.in` with multiple bound fields produces a CROSS-PRODUCT `cat.values` (length = product of distinct counts, with duplicates). `cat.identity[i]` for each row encodes the FULL cross-row scope (all bound fields' values at that row), not a per-field selector. Two `withCategory(cat, idxA).createSelectionId()` and `withCategory(cat, idxB).createSelectionId()` calls on the same cat share their column-level expressions, so PBI's `.equals()` cross-matches them. `Array.find()` always returns `items[0]`, silently overwriting the click. The log signature: `commitSelections() ... [Value7=predefined date@2, ...]` (idx=2 for what should be the second distinct value proves the duplicates exist).
+
+**Solution:** Stop reading `selectedValue` from live selections in `parseToggle` entirely. The click handler is the single source of truth. Persisted map restores once on first bind (`hasRestoredSelection` flag). `applyLayout`'s `needsFirstCommit` branch keeps the live `selectionManager` aligned by re-asserting the union after every click. No `.equals()` lookup against `liveSelIds` = no false-positive override.
+
+**Impact:** All multi-field binding scenarios now work correctly regardless of cross-product cat shape. External cross-filter sync is best-effort via `registerOnSelectCallback` only (acceptable trade-off given the constraint).
+
+**Generalized rule:** When a custom visual binds multiple fields to a single `for.in` mapping, do NOT rely on `.equals()` between selectionIds built from different `idx` values of the same cat — they share column-level expressions and false-positive match. Per-field selection state must be owned by the visual (click handler + persisted state), not derived from `getSelectionIds()`. For true per-field independent filtering (slicer-style), prefer `host.applyJsonFilter` with per-field IBasicFilter — selectionManager is for highlight/select-data-points semantics that don't compose across multiple fields.
+
+---
