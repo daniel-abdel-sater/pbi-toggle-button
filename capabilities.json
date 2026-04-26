@@ -5,17 +5,26 @@
       "name": "field",
       "kind": "Grouping",
       "description": "Up to 5 columns. Each column with exactly 2 distinct values produces its own toggle. Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
+    },
+    {
+      "displayName": "Default Selection (optional)",
+      "name": "defaultValue",
+      "kind": "Measure",
+      "description": "Optional. Bind one DAX measure per Field, in the same field-well order. Return 1 for the value that should be the default selection, and 0 for everything else. IMPORTANT: ALWAYS RETURN 0 (NEVER BLANK) for non-default rows — Power BI silently drops cross-product rows where every bound measure returns BLANK, which prunes the toggle's other value out of the data view and breaks the A/B layout. Example: SWITCH(TRUE(), SELECTEDVALUE(table[col]) = \"value1\", 1, 0) — note the trailing 0 fallback. Only applies on first bind / fresh report — once the user clicks, their choice wins until the field is rebound."
     }
   ],
   "dataViewMappings": [
     {
       "conditions": [
-        { "field": { "max": 5 } }
+        { "field": { "max": 5 }, "defaultValue": { "max": 5 } }
       ],
       "categorical": {
         "categories": {
           "for": { "in": "field" },
           "dataReductionAlgorithm": { "top": { "count": 10 } }
+        },
+        "values": {
+          "for": { "in": "defaultValue" }
         }
       }
     }
@@ -235,8 +244,15 @@
     "toolbar": {
       "displayName": "Runtime State",
       "properties": {
-        "selectedValue":  { "displayName": "Selected Value (legacy single-toggle)", "type": { "text": true } },
-        "selectedValues": { "displayName": "Selected Values (JSON map per queryName)", "type": { "text": true } }
+        "selectedValue":      { "displayName": "Selected Value (legacy single-toggle)",          "type": { "text": true } },
+        "selectedValues":     { "displayName": "Selected Values (JSON map per queryName)",       "type": { "text": true } },
+        "pbiDefaultsApplied": { "displayName": "Host chrome defaults applied (internal)",        "type": { "bool": true } }
+      }
+    },
+    "general": {
+      "displayName": "General",
+      "properties": {
+        "filter": { "type": { "filter": true } }
       }
     }
   },

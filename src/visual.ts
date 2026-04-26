@@ -35,6 +35,10 @@ interface ToggleState {
     cachedFieldQueryName: string | null;
     hasRestoredSelection: boolean;
     selectedValue: string | null;
+    /** Last value the `defaultValue` Measure flagged as truthy, kept across updates so we
+     *  can detect when the measure's chosen default changes (context shift) and slide the
+     *  thumb to the new side. null = no driver bound or no truthy row. */
+    lastDriverVal: string | null;
 
     // DOM refs (per toggle)
     blockEl:  HTMLDivElement | null;
@@ -76,6 +80,9 @@ export class Visual implements IVisual {
     // Apply-to dropdown plumbing per per-toggle card (Phase B/C). Snapshot of the active dataView's
     // metadata.objects so resolve helpers can read raw overrides without parsing again.
     private currentDvMeta: Record<string, Record<string, unknown> | undefined> | undefined;
+    // Snapshot of the latest DataView itself — used by getDriverDefaultForToggle to read
+    // the optional `defaultValue` Measure aligned to each bound field's slot.
+    private currentDv: DataView | undefined;
     // <cardName, <queryName, slotIdx>> — populated from `<card>.<card>IndexMap` in metadata; used
     // to resolve per-toggle slot reads. Stays stable across rebindings.
     private cardIndexMaps: Record<string, Record<string, number>> = { title: {}, content: {}, text: {}, thumb: {} };
@@ -117,7 +124,24 @@ export class Visual implements IVisual {
             // Fields must be from the same table or related tables (PBI requires a relationship).
             const dv: DataView | undefined = options.dataViews?.[0];
             const settingsDv = dv;
+            this.currentDv = dv;
             this.log(`update() type=${options.type} hasDv=${!!dv} viewport=${this.viewportW}x${this.viewportH}`);
+
+            // ── Diagnostic dump: dv.categorical structure ───────────────────────────
+            if (dv?.categorical) {
+                const cats = dv.categorical.categories || [];
+                const vals = dv.categorical.values || [];
+                this.log(`  DV categorical: cats=${cats.length} valueCols=${vals.length}`);
+                cats.forEach((c, i) => {
+                    const sample = (c.values || []).slice(0, 6).map(v => v == null ? "(blank)" : String(v));
+                    this.log(`    cat[${i}] qn=${c.source?.queryName} len=${c.values?.length} sample=[${sample.join(", ")}]`);
+                });
+                vals.forEach((v, i) => {
+                    const arr = v.values || [];
+                    const sample = arr.slice(0, 6).map(x => x == null ? "(blank)" : `${x}<${typeof x}>`);
+                    this.log(`    val[${i}] qn=${v.source?.queryName} roles=${JSON.stringify(v.source?.roles || {})} len=${arr.length} sample=[${sample.join(", ")}]`);
+                });
+            }
 
             if (settingsDv) {
                 this.fmtSettings = this.fmtService.populateFormattingSettingsModel(
@@ -144,6 +168,12 @@ export class Visual implements IVisual {
 
                 // Cache metadata snapshot for resolve helpers
                 this.currentDvMeta = settingsDv.metadata?.objects as Record<string, Record<string, unknown> | undefined> | undefined;
+
+                // One-time: turn off PBI host chrome (Title bar + Background fill) by default.
+                // Sentinel `toolbar.pbiDefaultsApplied` is persisted alongside so we never
+                // re-apply on subsequent updates (which would also fight the user if they
+                // re-enable either chrome later).
+                this.applyPbiHostDefaults();
             }
 
             // Each bound column in the single Field role is one toggle.
@@ -185,18 +215,40 @@ export class Visual implements IVisual {
 
             // Parse + restore selection per toggle
             const persistedMap = this.readPersistedMap(settingsDv);
-            const liveSelIds = this.selectionManager.getSelectionIds() || [];
 
+            // Snapshot pre-parse selections so we can detect MY-OWN-state changes after
+            // parseToggle (first-bind force-default or cascade-reset). We never re-assert
+            // based on what's in liveSelIds — when two instances of this visual are bound
+            // to the same fields with different selections, that turns into a flip-flop
+            // loop where each instance keeps overwriting the other's commit.
+            const prevSelections: (string | null)[] = this.toggles.map(t => t.selectedValue);
+
+            // Slicer-style cascade: each toggle's available values are filtered by the
+            // selections of all upstream toggles (j < i). `constraints` is built incrementally
+            // so toggle i sees toggles 0..i-1 with their freshly-parsed selections.
+            const constraints: (string | null)[] = new Array(this.toggles.length).fill(null);
             let anyError = false;
             const errorCounts: number[] = [];
-            for (const tog of this.toggles) {
-                const ok = this.parseToggle(tog, liveSelIds, persistedMap);
+            for (let i = 0; i < this.toggles.length; i++) {
+                const ok = this.parseToggle(i, constraints, persistedMap);
                 if (!ok.ok) {
                     anyError = true;
                     errorCounts.push(ok.distinctCount);
                 }
+                constraints[i] = this.toggles[i].selectedValue;
             }
-            if (anyError && this.toggles.every(t => t.items.length !== 2)) {
+
+            // Commit + persist only when MY-OWN selectedValue changed during parse.
+            // This catches first-bind force-default and cascade-reset, but stays silent
+            // on plain preserve passes — which is exactly what breaks the multi-instance loop.
+            const selectionsChanged = this.toggles.some((t, i) => t.selectedValue !== prevSelections[i]);
+            if (selectionsChanged) {
+                this.log(`selectionsChanged → commit & persist`);
+                this.commitSelections();
+                this.persistAll();
+            }
+            const anyRenderable = this.toggles.some(t => t.items.length === 1 || t.items.length === 2);
+            if (anyError && !anyRenderable) {
                 // No usable toggles at all → show error reflecting the first problem
                 this.renderError(errorCounts[0] ?? 0);
                 return;
@@ -209,14 +261,20 @@ export class Visual implements IVisual {
             const symA = String(this.fmtSettings.content.symbolA.value ?? "");
             const symB = String(this.fmtSettings.content.symbolB.value ?? "");
 
-            // Per-toggle structural fields — resolved title via Apply-to overrides
+            // Per-toggle structural fields — resolved title via Apply-to overrides.
+            // Use cachedItems for the items signature: cachedItems only grows (once we've
+            // seen 2 values it stays at 2), so transient cat shrinkage from cross-product
+            // pruning (BLANK-returning measures) doesn't toggle the renderKey 2↔1 and
+            // cause flicker. The only legitimate trigger for a structure rebuild is the
+            // first time we observe a new field's distinct values.
             const togglesKey = this.toggles.map(t => {
                 const tShowTitle = this.resolveBool("title", "showTitle", t.queryName, true);
                 const tTitleText = this.resolveText("title", "titleText", t.queryName, "");
                 const tTitlePos  = this.resolveDropdown("title", "titlePosition", t.queryName, "top-left");
-                const items = t.items.length === 2
-                    ? `${t.items[0].display}|${t.items[1].display}`
-                    : "none";
+                const cache = t.cachedItems.length > 0 ? t.cachedItems : t.items;
+                const items = cache.length === 2
+                    ? `${cache[0].display}|${cache[1].display}`
+                    : (cache.length === 1 ? cache[0].display : "none");
                 return [t.queryName, items, tShowTitle ? "T" : "t", tShowTitle ? tTitleText : "", tShowTitle ? tTitlePos : ""].join("␟");
             }).join("␞");
 
@@ -246,6 +304,24 @@ export class Visual implements IVisual {
             this.applyCardVisibility(card);
         }
         return this.fmtService.buildFormattingModel(this.fmtSettings);
+    }
+
+    /** First-load only: disable the PBI host's default Title bar and Background fill so
+     *  the visual presents itself without chrome. We persist a sentinel under `toolbar`
+     *  to make this idempotent — once the user (or this method) has touched those
+     *  switches, we never re-assert them, so the user can re-enable either chrome later
+     *  and it sticks. */
+    private applyPbiHostDefaults(): void {
+        const flag = this.currentDvMeta?.toolbar?.pbiDefaultsApplied;
+        if (flag === true) return;
+        this.log("applyPbiHostDefaults: persisting title.show=false, background.show=false");
+        this.host.persistProperties({
+            merge: [
+                { objectName: "title",      properties: { show: false } as Record<string, powerbi.DataViewPropertyValue>, selector: null as unknown as powerbi.data.Selector },
+                { objectName: "background", properties: { show: false } as Record<string, powerbi.DataViewPropertyValue>, selector: null as unknown as powerbi.data.Selector },
+                { objectName: "toolbar",    properties: { pbiDefaultsApplied: true } as Record<string, powerbi.DataViewPropertyValue>, selector: null as unknown as powerbi.data.Selector }
+            ]
+        });
     }
 
     // ── Apply-to plumbing ──────────────────────────────────────────────
@@ -415,6 +491,7 @@ export class Visual implements IVisual {
             cachedFieldQueryName: null,
             hasRestoredSelection: false,
             selectedValue: null,
+            lastDriverVal: null,
             blockEl: null, titleEl: null, wrapEl: null, toggleEl: null,
             btnAEl: null, btnBEl: null,
             symAEl: null, symBEl: null,
@@ -423,13 +500,59 @@ export class Visual implements IVisual {
         };
     }
 
-    /** Parse one toggle's data + restore selection. Returns {ok:true} for n=2 / cache reuse,
-     *  or {ok:false, distinctCount} for an error state to bubble up. */
+    /** Read the optional Default Selection Measure for the given toggle slot and return
+     *  the distinct value that the measure flags as truthy (non-zero / non-blank / true).
+     *  Returns null when no measure is bound at this slot, when no row evaluates truthy,
+     *  or when the truthy row's value isn't actually one of the toggle's items.
+     *
+     *  Field-well order rules: PBI emits bound `defaultValue` measures into
+     *  `dv.categorical.values` in the order they're added. Measure at slot i drives
+     *  the field at slot i. Reorder the field-well to reorder the binding. */
+    private getDriverDefaultForToggle(
+        togIdx: number,
+        distinct: { raw: powerbi.PrimitiveValue; idx: number }[]
+    ): string | null {
+        const valCols = this.currentDv?.categorical?.values;
+        if (!valCols || valCols.length === 0) {
+            this.log(`  getDriverDefaultForToggle slot=${togIdx} → NO MEASURES BOUND (valCols=${valCols ? valCols.length : "undef"})`);
+            return null;
+        }
+        if (togIdx >= valCols.length) {
+            this.log(`  getDriverDefaultForToggle slot=${togIdx} → NO MEASURE AT THIS SLOT (have ${valCols.length} measure(s))`);
+            return null;
+        }
+        const measure = valCols[togIdx];
+        if (!measure?.values) {
+            this.log(`  getDriverDefaultForToggle slot=${togIdx} → measure has no .values (qn=${measure?.source?.queryName})`);
+            return null;
+        }
+
+        const trace: string[] = [];
+        let chosen: string | null = null;
+        for (const d of distinct) {
+            const v = measure.values[d.idx];
+            const valStr = d.raw == null ? "(blank)" : String(d.raw);
+            const truthy =
+                (typeof v === "number"  && v !== 0)            ||
+                (typeof v === "string"  && v !== "" && v !== "0") ||
+                (typeof v === "boolean" && v === true);
+            trace.push(`${valStr}@row${d.idx}=${v == null ? "BLANK" : `${v}<${typeof v}>`}${truthy ? "✓" : ""}`);
+            if (truthy && chosen == null) chosen = valStr;
+        }
+        this.log(`  getDriverDefaultForToggle slot=${togIdx} measure=${measure.source?.queryName} rows=[${trace.join(", ")}] → chosen=${chosen}`);
+        return chosen;
+    }
+
+    /** Parse one toggle's data + restore selection. Returns {ok:true} for n=1/2 / cache reuse,
+     *  or {ok:false, distinctCount} for an error state to bubble up.
+     *  Applies slicer-style cascade: rows where any upstream toggle's value !== its
+     *  current selection are excluded from the distinct collection. */
     private parseToggle(
-        tog: ToggleState,
-        liveSelIds: ReadonlyArray<unknown>,
+        togIdx: number,
+        constraints: (string | null)[],
         persistedMap: Record<string, string>
     ): { ok: boolean; distinctCount: number } {
+        const tog = this.toggles[togIdx];
         const cat = tog.cat;
         if (!cat || !Array.isArray(cat.values)) return { ok: false, distinctCount: 0 };
 
@@ -440,15 +563,27 @@ export class Visual implements IVisual {
             tog.hasRestoredSelection = false;
         }
 
-        // Collect up to 3 distinct values to detect "too many"
+        // Collect up to 3 distinct values, masked by upstream toggle selections
         const values = cat.values;
         const distinct: { raw: powerbi.PrimitiveValue; idx: number }[] = [];
         const seen = new Set<string>();
-        for (let i = 0; i < values.length; i++) {
-            const k = values[i] == null ? "(blank)" : String(values[i]);
+        for (let r = 0; r < values.length; r++) {
+            // Slicer cascade: row must satisfy every upstream toggle's selection
+            let matches = true;
+            for (let j = 0; j < togIdx; j++) {
+                const otherSel = constraints[j];
+                if (otherSel == null) continue; // cleared upstream → no constraint
+                const otherCat = this.toggles[j].cat;
+                const otherVal = otherCat?.values?.[r];
+                const otherStr = otherVal == null ? "(blank)" : String(otherVal);
+                if (otherStr !== otherSel) { matches = false; break; }
+            }
+            if (!matches) continue;
+
+            const k = values[r] == null ? "(blank)" : String(values[r]);
             if (seen.has(k)) continue;
             seen.add(k);
-            distinct.push({ raw: values[i], idx: i });
+            distinct.push({ raw: values[r], idx: r });
             if (distinct.length >= 3) break;
         }
         const n = distinct.length;
@@ -456,31 +591,37 @@ export class Visual implements IVisual {
         if (n === 2) {
             const currentValues = distinct.map(d => d.raw == null ? "(blank)" : String(d.raw));
             const cachedValues = tog.cachedItems.map(i => i.value);
-            const valuesChanged = tog.cachedItems.length !== 2 ||
-                currentValues[0] !== cachedValues[0] || currentValues[1] !== cachedValues[1];
+            // Set-equality (order-independent): the values themselves haven't changed if
+            // the two distinct values match the cache regardless of order. PBI can shuffle
+            // the cross-product across updates so that the FIRST occurrence of a value
+            // flips between rows; we don't want A and B to visually swap when that happens.
+            const sameSet = cachedValues.length === 2 && currentValues.length === 2 &&
+                cachedValues.every(v => currentValues.indexOf(v) !== -1);
 
-            // ALWAYS rebuild items from the CURRENT cat. Caching items across updates
-            // previously worked because commitSelections() passed cached selectionId refs
-            // to select() — the host echoed them back, so .equals() matched by reference.
-            // Now commitSelections() passes FRESH ids (required to avoid "expr is undefined"
-            // in PBI's SQL generator). After the round-trip, cached items have stale identity
-            // expressions and .equals() degrades to column-only matching — every cached id
-            // on column X falsely matches any live id on column X, so Array.find() always
-            // returns items[0]. Rebuilding fresh each update keeps identity expressions
-            // tied to the live cat, restoring per-row .equals() correctness.
-            tog.items = distinct.map((d) => {
-                const sid = this.host.createSelectionIdBuilder()
-                    .withCategory(cat, d.idx)
-                    .createSelectionId();
-                const display = d.raw == null ? "(blank)" : String(d.raw);
-                return { value: display, display, selectionId: sid };
-            });
-
-            if (valuesChanged) {
+            // Always rebuild fresh selectionIds (PBI's QueryGenerator needs current SQExpr).
+            // When the value SET matches cache, build in CACHED ORDER so A/B stays stable
+            // across cross-product shuffles. When the set differs, build in cat order and
+            // refresh the cache.
+            if (sameSet) {
+                tog.items = cachedValues.map(cv => {
+                    const d = distinct.find(dd =>
+                        (dd.raw == null ? "(blank)" : String(dd.raw)) === cv);
+                    const sid = this.host.createSelectionIdBuilder()
+                        .withCategory(cat, d!.idx)
+                        .createSelectionId();
+                    return { value: cv, display: cv, selectionId: sid };
+                });
+            } else {
+                tog.items = distinct.map((d) => {
+                    const sid = this.host.createSelectionIdBuilder()
+                        .withCategory(cat, d.idx)
+                        .createSelectionId();
+                    const display = d.raw == null ? "(blank)" : String(d.raw);
+                    return { value: display, display, selectionId: sid };
+                });
                 tog.cachedItems = tog.items;
                 tog.hasRestoredSelection = false;
             }
-            // else: cachedItems retained for valuesChanged detection only
 
             // The click handler is the single source of truth for selectedValue.
             // We deliberately do NOT read it back from `liveSelIds` via `.equals()`:
@@ -496,32 +637,111 @@ export class Visual implements IVisual {
             //     after a click, keeping live selectionManager state aligned.
             //   • External cross-filter sync is handled separately by
             //     registerOnSelectCallback → resyncAllFromSelectionManager.
+            // Always read the driver — the result drives both first-bind defaulting and
+            // post-bind re-evaluation when the measure's chosen default changes (context
+            // shift). lastDriverVal lets us tell a real change from a no-op echo from
+            // persistProperties round-trips.
+            const driverVal = this.getDriverDefaultForToggle(togIdx, distinct);
+            const driverChanged = driverVal !== tog.lastDriverVal;
+
             if (!tog.hasRestoredSelection) {
                 tog.hasRestoredSelection = true;
                 const persistedVal = persistedMap[tog.queryName];
-                if (typeof persistedVal === "string" && persistedVal !== "" &&
+                if (persistedVal === "") {
+                    // "" sentinel = user explicitly cleared this toggle. Preserve the
+                    // null state across cascades that change which items are available
+                    // (otherwise selecting an upstream toggle would auto-revive a
+                    // selection on a downstream toggle the user had deliberately cleared).
+                    tog.selectedValue = null;
+                    this.log(`  parseToggle(${tog.queryName}): first bind — restored cleared (persistedVal="")`);
+                } else if (typeof persistedVal === "string" && persistedVal !== "" &&
                     (persistedVal === tog.items[0].value || persistedVal === tog.items[1].value)) {
                     tog.selectedValue = persistedVal;
                     this.log(`  parseToggle(${tog.queryName}): first bind — restored from persisted=${persistedVal}`);
+                } else if (driverVal != null &&
+                    (driverVal === tog.items[0].value || driverVal === tog.items[1].value)) {
+                    tog.selectedValue = driverVal;
+                    this.log(`  parseToggle(${tog.queryName}): first bind — measure-driven default=${driverVal}`);
                 } else {
                     tog.selectedValue = tog.items[0].value;
                     this.log(`  parseToggle(${tog.queryName}): first bind — force-default A=${tog.items[0].value}`);
                 }
+            } else if (driverChanged && driverVal != null &&
+                (driverVal === tog.items[0].value || driverVal === tog.items[1].value)) {
+                // Driver re-evaluation: the measure's chosen default changed since last
+                // update (e.g. context filter shift). Slide the thumb to the new side.
+                // Only the CSS-var thumb position animates — DOM stays put.
+                this.log(`  parseToggle(${tog.queryName}): driver re-fired ${tog.selectedValue} → ${driverVal}`);
+                tog.selectedValue = driverVal;
             } else {
-                this.log(`  parseToggle(${tog.queryName}): preserve selectedValue=${tog.selectedValue}`);
+                // Cascade-reset: if the upstream selection invalidated this toggle's
+                // current non-null selectedValue, snap to the first available value.
+                // null is "user deliberately cleared" — never cascade-reset over null.
+                const stillValid = tog.selectedValue == null ||
+                                   tog.selectedValue === tog.items[0].value ||
+                                   tog.selectedValue === tog.items[1].value;
+                if (!stillValid) {
+                    tog.selectedValue = tog.items[0].value;
+                    this.log(`  parseToggle(${tog.queryName}): cascade-reset → ${tog.selectedValue}`);
+                } else {
+                    this.log(`  parseToggle(${tog.queryName}): preserve selectedValue=${tog.selectedValue}`);
+                }
             }
+            tog.lastDriverVal = driverVal;
             return { ok: true, distinctCount: 2 };
-        } else if ((n === 1 || n === 0) && tog.cachedItems.length === 2) {
+        } else if (n === 1 && tog.cachedItems.length === 2) {
+            // Had 2 values, currently filtered down to 1 — keep A/B UI from cache,
+            // update selectedValue to the remaining value.
             tog.items = tog.cachedItems;
-            if (n === 1) {
-                const remaining = distinct[0].raw == null ? "(blank)" : String(distinct[0].raw);
-                const match = tog.items.find(it => it.value === remaining);
-                if (match) tog.selectedValue = match.value;
+            const remaining = distinct[0].raw == null ? "(blank)" : String(distinct[0].raw);
+            const match = tog.items.find(it => it.value === remaining);
+            if (match) tog.selectedValue = match.value;
+            return { ok: true, distinctCount: 1 };
+        } else if (n === 1) {
+            // Genuine single-value field — render as a single-button toggle.
+            // Click toggles between selected (filter active) and cleared (null).
+            const v = distinct[0];
+            const display = v.raw == null ? "(blank)" : String(v.raw);
+            const cachedSame = tog.cachedItems.length === 1 && tog.cachedItems[0].value === display;
+
+            tog.items = [{
+                value: display,
+                display,
+                selectionId: this.host.createSelectionIdBuilder().withCategory(cat, v.idx).createSelectionId()
+            }];
+            if (!cachedSame) {
+                tog.cachedItems = tog.items;
+                tog.hasRestoredSelection = false;
             }
-            return { ok: true, distinctCount: n };
+
+            if (!tog.hasRestoredSelection) {
+                tog.hasRestoredSelection = true;
+                const persistedVal = persistedMap[tog.queryName];
+                if (persistedVal === "") {
+                    tog.selectedValue = null;
+                    this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — restored cleared`);
+                } else if (persistedVal === display) {
+                    tog.selectedValue = display;
+                    this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — restored from persisted=${persistedVal}`);
+                } else {
+                    // Default to selected: a single-value field's natural state is "filter on".
+                    tog.selectedValue = display;
+                    this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — default selected=${display}`);
+                }
+            } else if (tog.selectedValue != null && tog.selectedValue !== display) {
+                // Cascade-reset (n=1): only one option available, snap to it.
+                tog.selectedValue = display;
+                this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1) → ${tog.selectedValue}`);
+            } else {
+                this.log(`  parseToggle(${tog.queryName}): preserve selectedValue=${tog.selectedValue} (n=1)`);
+            }
+            return { ok: true, distinctCount: 1 };
+        } else if (n === 0 && tog.cachedItems.length >= 1) {
+            // Filtered down to nothing — preserve cached UI so layout stays stable.
+            tog.items = tog.cachedItems;
+            return { ok: true, distinctCount: 0 };
         }
-        // n === 0 with no cache → not yet usable
-        // n >= 3 → wrong field
+        // n === 0 fresh or n >= 3 → not usable
         return { ok: false, distinctCount: n };
     }
 
@@ -548,7 +768,10 @@ export class Visual implements IVisual {
     private persistAll(): void {
         const map: Record<string, string> = {};
         for (const t of this.toggles) {
-            if (t.selectedValue != null) map[t.queryName] = t.selectedValue;
+            // Always persist — "" sentinel marks "explicitly cleared" so single-value
+            // toggles can restore an off state across reloads. n=2 toggles never have
+            // selectedValue=null after init, so this is harmless for them.
+            map[t.queryName] = t.selectedValue ?? "";
         }
         this.host.persistProperties({
             merge: [{
@@ -559,61 +782,95 @@ export class Visual implements IVisual {
         });
     }
 
-    /** Apply the union of every toggle's currently-active selectionId. Replaces all selections
-     *  with this set so each toggle's filter coexists with the others.
-     *
-     *  IMPORTANT: cached selectionIds in tog.items work for `.equals()` (which fixed the
-     *  multi-instance loop) but PBI's QueryGenerator needs a FRESH SQExpr at select() time —
-     *  passing a stale cached id throws "Cannot read properties of undefined (reading 'expr')".
-     *  So we rebuild from the CURRENT `cat` here. */
+    /** Build an IBasicFilter (column-scoped In filter) from a category column + value.
+     *  Returns null if we can't extract a clean { table, column } target. */
+    private buildBasicFilter(cat: powerbi.DataViewCategoryColumn, value: string): unknown | null {
+        const source = cat.source as { queryName?: string; expr?: { source?: { entity?: string }; ref?: string } } | undefined;
+        let table = "";
+        let column = "";
+        const expr = source?.expr;
+        if (expr?.source?.entity && expr?.ref) {
+            table = expr.source.entity;
+            column = expr.ref;
+        } else if (source?.queryName) {
+            // queryName format: "Table.Column" (or "Table.Measure"). Use first dot as split.
+            const qn = source.queryName;
+            const dotIdx = qn.indexOf(".");
+            if (dotIdx > 0) {
+                table = qn.substring(0, dotIdx);
+                column = qn.substring(dotIdx + 1);
+            }
+        }
+        this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} value=${value}`);
+        if (!table || !column) return null;
+        return {
+            $schema: "http://powerbi.com/product/schema#basic",
+            target: { table, column },
+            operator: "In",
+            values: [value],
+            filterType: 1
+        };
+    }
+
+    /** Apply the union of every toggle's currently-active selection as per-column basic
+     *  filters via host.applyJsonFilter. This is column-scoped (not row-scoped like
+     *  withCategory selectionIds), so deselecting one toggle truly removes its filter
+     *  contribution — siblings on the page see only the remaining toggles' filters. */
     private commitSelections(): void {
-        const ids: ISelectionId[] = [];
+        const filters: unknown[] = [];
         const tracelog: string[] = [];
         for (const t of this.toggles) {
             if (t.selectedValue == null) continue;
-            const cat = t.cat;
-            if (!cat || !Array.isArray(cat.values)) continue;
-            const idx = (cat.values as powerbi.PrimitiveValue[]).findIndex((v: powerbi.PrimitiveValue) =>
-                (v == null ? "(blank)" : String(v)) === t.selectedValue
-            );
-            if (idx < 0) continue;
-            const freshId = this.host.createSelectionIdBuilder()
-                .withCategory(cat, idx)
-                .createSelectionId();
-            ids.push(freshId);
-            tracelog.push(`${t.queryName}=${t.selectedValue}@${idx}`);
+            if (!t.cat?.source) continue;
+            const f = this.buildBasicFilter(t.cat, t.selectedValue);
+            if (f) {
+                filters.push(f);
+                tracelog.push(`${t.queryName}=${t.selectedValue}`);
+            }
         }
-        this.log(`commitSelections() ids.count=${ids.length} [${tracelog.join(", ")}]`);
-        if (ids.length === 0) {
-            this.selectionManager.clear();
-        } else {
-            (this.selectionManager.select as unknown as (ids: ISelectionId[], multi: boolean) => unknown)(ids, false);
+        const action = filters.length === 0
+            ? 1 /* FilterAction.remove — clears all filters from this visual */
+            : 0 /* FilterAction.merge — replaces filter set with these */;
+        this.log(`commitSelections() applyJsonFilter filters=${filters.length} action=${action} [${tracelog.join(", ")}]`);
+        try {
+            (this.host.applyJsonFilter as unknown as (
+                f: unknown, objectName: string, propertyName: string, action: number
+            ) => void)(filters, "general", "filter", action);
+        } catch (e) {
+            console.error("[ToggleButton] applyJsonFilter error:", e);
         }
-        const live = this.selectionManager.getSelectionIds() || [];
-        this.log(`  → after select, getSelectionIds().length=${live.length}`);
     }
 
     private resyncAllFromSelectionManager(): void {
-        const selIds = this.selectionManager.getSelectionIds() || [];
-        if (selIds.length === 0) return; // preserve local choices
-        for (const t of this.toggles) {
-            for (const item of t.items) {
-                if (selIds.some(s => (s as unknown as { equals?: (o: ISelectionId) => boolean }).equals?.(item.selectionId))) {
-                    t.selectedValue = item.value;
-                    break;
-                }
-            }
-        }
+        // Intentionally a no-op. Reading liveSelIds via .equals() is unreliable with
+        // cross-product cat identities (false-positive matches always pick items[0]),
+        // and writing the result back would also undo independent state across multiple
+        // instances of this visual — exactly the loop we're trying to break. Each
+        // instance owns its own selectedValue; cross-filter to other visuals is one-way
+        // (commit → host); read-back is not attempted.
     }
 
     // ── Click handling ─────────────────────────────────────────────────
 
     private onButtonClick(toggleIdx: number, side: "A" | "B"): void {
         const tog = this.toggles[toggleIdx];
-        if (!tog || tog.items.length !== 2) return;
+        if (!tog || tog.items.length === 0 || tog.items.length > 2) return;
+        // Single-value toggle has no B side
+        if (side === "B" && tog.items.length === 1) return;
         const clicked = side === "A" ? tog.items[0] : tog.items[1];
+        if (!clicked) return;
         this.log(`onButtonClick(idx=${toggleIdx} qn=${tog.queryName} side=${side} clicked=${clicked.value} prevSelected=${tog.selectedValue})`);
-        if (tog.selectedValue === clicked.value) { this.log(`  → no-op (already on ${side})`); return; }
+        if (tog.selectedValue === clicked.value) {
+            // Click the already-selected button → clear (toggle off). Single-value toggle
+            // is the always-on default model; deselection is the user's escape hatch.
+            tog.selectedValue = null;
+            this.commitSelections();
+            this.persistAll();
+            this.refreshActiveClasses(tog);
+            this.positionThumb(tog);
+            this.log(`  → toggled off`);
+            return;
+        }
 
         tog.selectedValue = clicked.value;
         this.commitSelections();
@@ -659,7 +916,7 @@ export class Visual implements IVisual {
         title.textContent = "Toggle Button";
         const sub = document.createElement("div");
         sub.className = "tb-landing-sub";
-        sub.textContent = "Bind 1–5 fields. Each must have exactly 2 distinct values.";
+        sub.textContent = "Bind 1–5 fields. Each must have 1 or 2 distinct values.";
         box.appendChild(title);
         box.appendChild(sub);
         this.root.appendChild(box);
@@ -672,10 +929,12 @@ export class Visual implements IVisual {
         box.className = "tb-landing tb-error";
         const title = document.createElement("div");
         title.className = "tb-landing-title";
-        title.textContent = "Need exactly 2 values";
+        title.textContent = n === 0 ? "No data" : "Too many values";
         const sub = document.createElement("div");
         sub.className = "tb-landing-sub";
-        sub.textContent = `Bound field has ${n} distinct value${n === 1 ? "" : "s"}. Use a field with exactly 2.`;
+        sub.textContent = n === 0
+            ? "Bound field has no rows."
+            : `Bound field has ${n} distinct values. Use a field with 1 or 2 distinct values.`;
         box.appendChild(title);
         box.appendChild(sub);
         this.root.appendChild(box);
@@ -741,7 +1000,7 @@ export class Visual implements IVisual {
         // Render one .tb-block per toggle, with per-toggle resolved Title + Content fields
         for (let i = 0; i < this.toggles.length; i++) {
             const tog = this.toggles[i];
-            if (tog.items.length !== 2) continue;
+            if (tog.items.length < 1 || tog.items.length > 2) continue;
             const t = this.resolveTitleForToggle(tog.queryName);
             const c = this.resolveContentForToggle(tog.queryName);
             this.renderToggleBlock(tog, i, {
@@ -788,19 +1047,28 @@ export class Visual implements IVisual {
             btn.type = "button";
             btn.className = `tb-btn tb-btn-${side.toLowerCase()}`;
 
+            const item = side === "A" ? tog.items[0] : tog.items[1];
+
             const sym = document.createElement("span");
             sym.className = "tb-sym";
             sym.textContent = side === "A" ? opts.symA : opts.symB;
-            if (!opts.showSymbols || !sym.textContent) sym.classList.add("is-hidden");
+            if (!opts.showSymbols || !sym.textContent || !item) sym.classList.add("is-hidden");
 
             const lbl = document.createElement("span");
             lbl.className = "tb-lbl";
-            lbl.textContent = side === "A" ? tog.items[0].display : tog.items[1].display;
-            if (!opts.showLabels) lbl.classList.add("is-hidden");
+            lbl.textContent = item ? item.display : "";
+            if (!opts.showLabels || !item) lbl.classList.add("is-hidden");
 
             btn.appendChild(sym);
             btn.appendChild(lbl);
-            btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(idx, side); });
+            if (item) {
+                btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(idx, side); });
+            } else {
+                // Single-value toggle: hide the unused B side entirely so .tb-toggle has only one visible child.
+                btn.style.display = "none";
+                btn.setAttribute("aria-hidden", "true");
+                btn.tabIndex = -1;
+            }
             return { btn, sym, lbl };
         };
 
@@ -828,6 +1096,11 @@ export class Visual implements IVisual {
     /** Compute --thumb-x and --thumb-w from active button rect relative to track for ONE toggle. */
     private positionThumb(tog: ToggleState): void {
         if (!tog.toggleEl || !tog.btnAEl || !tog.btnBEl) return;
+        // Single-value cleared state: hide thumb (no active button to slide over).
+        if (tog.selectedValue == null) {
+            tog.toggleEl.classList.remove("tb-ready");
+            return;
+        }
         const isB = tog.items[1] && tog.selectedValue === tog.items[1].value;
         const active = isB ? tog.btnBEl : tog.btnAEl;
 
@@ -1031,23 +1304,8 @@ export class Visual implements IVisual {
             for (const t of this.toggles) this.positionThumb(t);
         });
 
-        // ── First-time only: if any toggle just got a forced default (no live, no persisted),
-        // commit the union to the host so cross-filter actually fires.
-        const liveSelIdsForCheck = this.selectionManager.getSelectionIds() || [];
-        const missing: string[] = [];
-        for (const t of this.toggles) {
-            if (!t.hasRestoredSelection || t.selectedValue == null) continue;
-            const inLive = liveSelIdsForCheck.some(s2 =>
-                t.items.some(i => (s2 as unknown as { equals?: (o: ISelectionId) => boolean }).equals?.(i.selectionId))
-            );
-            if (!inLive) missing.push(`${t.queryName}=${t.selectedValue}`);
-        }
-        if (missing.length > 0) {
-            this.log(`needsFirstCommit: missing in live selections → [${missing.join(", ")}]`);
-            this.commitSelections();
-            this.persistAll();
-        } else {
-            this.log(`applyLayout end — all expected selections present in live (count=${liveSelIdsForCheck.length})`);
-        }
+        // Commit decisions live in update() (diff between pre-parse snapshot and post-parse
+        // selectedValue). applyLayout is pure layout/style — never reads liveSelIds for
+        // re-assertion, otherwise multi-instance flip-flop loops re-emerge.
     }
 }

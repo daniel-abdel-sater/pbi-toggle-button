@@ -8,7 +8,7 @@
 
 ## Scope
 
-A slicer-style toggle button bound to a field that has **exactly 2 distinct values**. Clicking a side cross-filters the report to that value. Clicking the already-selected side clears the filter.
+A slicer-style toggle button bound to a field that has **1 or 2 distinct values**. With 2 values: classic A/B toggle (click switches sides). With 1 value: single-button toggle that toggles between selected (filter active) and cleared (filter off). Up to 5 fields can be bound; each renders an independent toggle pill.
 
 ### Format pane
 - Toggle size (overall height; padding, thumb, font scale proportionally)
