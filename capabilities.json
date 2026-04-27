@@ -4,7 +4,7 @@
       "displayName": "Field",
       "name": "field",
       "kind": "Grouping",
-      "description": "Up to 5 columns. Each column with 1, 2, or 3 distinct values produces its own toggle (single button, two-side, or three-segment). Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
+      "description": "Up to 5 columns. Each column produces its own toggle — one segment per distinct value (Power BI's data reduction caps the count at top 10 by default). Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
     },
     {
       "displayName": "Default Selection (optional)",
@@ -21,7 +21,7 @@
       "categorical": {
         "categories": {
           "for": { "in": "field" },
-          "dataReductionAlgorithm": { "top": { "count": 10 } }
+          "dataReductionAlgorithm": { "top": { "count": 30000 } }
         },
         "values": {
           "for": { "in": "defaultValue" }
@@ -152,40 +152,40 @@
         "view":          { "displayName": "Apply to",            "type": { "text": true } },
         "textIndexMap":  { "displayName": "Slot Map (internal)", "type": { "text": true } },
 
-        "labelActiveColor":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor",    "selector": ["field"] } } },
+        "labelInactiveColor":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor",  "selector": ["field"] } } },
+        "symbolActiveColor":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor",   "selector": ["field"] } } },
+        "symbolInactiveColor": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor", "selector": ["field"] } } },
         "symbolInactiveAlpha": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
 
-        "labelActiveColor_0":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor_0":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor_0":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor_0": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor_0":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor_0",    "selector": ["field"] } } },
+        "labelInactiveColor_0":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor_0",  "selector": ["field"] } } },
+        "symbolActiveColor_0":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor_0",   "selector": ["field"] } } },
+        "symbolInactiveColor_0": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor_0", "selector": ["field"] } } },
         "symbolInactiveAlpha_0": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
 
-        "labelActiveColor_1":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor_1":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor_1":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor_1": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor_1":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor_1",    "selector": ["field"] } } },
+        "labelInactiveColor_1":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor_1",  "selector": ["field"] } } },
+        "symbolActiveColor_1":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor_1",   "selector": ["field"] } } },
+        "symbolInactiveColor_1": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor_1", "selector": ["field"] } } },
         "symbolInactiveAlpha_1": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
 
-        "labelActiveColor_2":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor_2":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor_2":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor_2": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor_2":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor_2",    "selector": ["field"] } } },
+        "labelInactiveColor_2":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor_2",  "selector": ["field"] } } },
+        "symbolActiveColor_2":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor_2",   "selector": ["field"] } } },
+        "symbolInactiveColor_2": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor_2", "selector": ["field"] } } },
         "symbolInactiveAlpha_2": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
 
-        "labelActiveColor_3":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor_3":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor_3":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor_3": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor_3":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor_3",    "selector": ["field"] } } },
+        "labelInactiveColor_3":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor_3",  "selector": ["field"] } } },
+        "symbolActiveColor_3":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor_3",   "selector": ["field"] } } },
+        "symbolInactiveColor_3": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor_3", "selector": ["field"] } } },
         "symbolInactiveAlpha_3": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } },
 
-        "labelActiveColor_4":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } } },
-        "labelInactiveColor_4":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } } },
-        "symbolActiveColor_4":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } } },
-        "symbolInactiveColor_4": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } } },
+        "labelActiveColor_4":    { "displayName": "Label Color (Active)",     "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelActiveColor_4",    "selector": ["field"] } } },
+        "labelInactiveColor_4":  { "displayName": "Label Color (Inactive)",   "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "labelInactiveColor_4",  "selector": ["field"] } } },
+        "symbolActiveColor_4":   { "displayName": "Symbol Color (Active)",    "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolActiveColor_4",   "selector": ["field"] } } },
+        "symbolInactiveColor_4": { "displayName": "Symbol Color (Inactive)",  "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "symbolInactiveColor_4", "selector": ["field"] } } },
         "symbolInactiveAlpha_4": { "displayName": "Inactive Symbol α (×100)", "type": { "numeric": true } }
       }
     },
@@ -195,37 +195,37 @@
         "view":          { "displayName": "Apply to",            "type": { "text": true } },
         "thumbIndexMap": { "displayName": "Slot Map (internal)", "type": { "text": true } },
 
-        "thumbGlowColor":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor",   "selector": ["field"] } } },
         "thumbRingAlpha":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
         "thumbHighlightAlpha": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
 
-        "thumbGlowColor_0":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor_0":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor_0", "selector": ["field"] } } },
         "thumbRingAlpha_0":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha_0":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread_0":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
         "thumbHighlightAlpha_0": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
 
-        "thumbGlowColor_1":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor_1":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor_1", "selector": ["field"] } } },
         "thumbRingAlpha_1":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha_1":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread_1":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
         "thumbHighlightAlpha_1": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
 
-        "thumbGlowColor_2":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor_2":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor_2", "selector": ["field"] } } },
         "thumbRingAlpha_2":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha_2":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread_2":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
         "thumbHighlightAlpha_2": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
 
-        "thumbGlowColor_3":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor_3":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor_3", "selector": ["field"] } } },
         "thumbRingAlpha_3":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha_3":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread_3":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },
         "thumbHighlightAlpha_3": { "displayName": "Inner Highlight α (×100)", "type": { "numeric": true } },
 
-        "thumbGlowColor_4":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } } },
+        "thumbGlowColor_4":      { "displayName": "Accent Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "thumbGlowColor_4", "selector": ["field"] } } },
         "thumbRingAlpha_4":      { "displayName": "Ring α (×100)",           "type": { "numeric": true } },
         "thumbBloomAlpha_4":     { "displayName": "Bloom α (×100)",          "type": { "numeric": true } },
         "thumbGlowSpread_4":     { "displayName": "Bloom Spread (px)",        "type": { "numeric": true } },

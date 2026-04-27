@@ -1,8 +1,23 @@
 "use strict";
 
+import powerbi from "powerbi-visuals-api";
 import { formattingSettings } from "powerbi-visuals-utils-formattingmodel";
 import FormattingSettingsCard = formattingSettings.SimpleCard;
 import FormattingSettingsModel = formattingSettings.Model;
+
+// FX (conditional formatting / lightning-bolt) — enable per CLAUDE.md §P25:
+// `instanceKind: ConstantOrRule` on every ColorPicker that should expose the FX UI.
+// ColorPicker only — NumUpDown / ToggleSwitch / ItemDropdown don't accept it.
+const FX = powerbi.VisualEnumerationInstanceKinds.ConstantOrRule;
+
+// Wildcard selector that tells PBI "this slice can be applied per data-point of the
+// rule's inputRole". With this, PBI emits per-row FX rule output to cat.objects[i].
+// Without it, FX rules are global (single resolved value across the whole visual).
+// Equivalent to powerbi-visuals-utils-dataviewutils's `dataViewWildcard.createDataViewWildcardSelector(InstancesAndTotals)`;
+// inlined to avoid the extra dependency.
+const FX_SELECTOR = {
+    data: [{ dataViewWildcard: { matchingOption: 0 } }]
+} as unknown as powerbi.data.Selector;
 
 // ── Title ────────────────────────────────────────────────────────────
 // Apply-to dropdown pattern: "all" (defaults applied to every toggle) or
@@ -286,23 +301,31 @@ class TextCard extends FormattingSettingsCard {
     });
     labelActiveColor = new formattingSettings.ColorPicker({
         name: "labelActiveColor", displayName: "Label Color (Active)",
-        description: "Color of the label on the currently selected side.",
-        value: { value: "#F1F5F9" }
+        description: "Color of the label on the currently selected side. Click the FX icon to drive this from a DAX measure.",
+        value: { value: "#F1F5F9" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
     });
     labelInactiveColor = new formattingSettings.ColorPicker({
         name: "labelInactiveColor", displayName: "Label Color (Inactive)",
-        description: "Color of the label on the non-selected side.",
-        value: { value: "#94A3B8" }
+        description: "Color of the label on the non-selected side. Click the FX icon to drive this from a DAX measure.",
+        value: { value: "#94A3B8" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
     });
     symbolActiveColor = new formattingSettings.ColorPicker({
         name: "symbolActiveColor", displayName: "Symbol Color (Active)",
-        description: "Color of the symbol on the currently selected side. Default matches the Accent Color (Thumb card) but is independent — changing the accent later won't override this.",
-        value: { value: "#60A5FA" }
+        description: "Color of the symbol on the currently selected side. Default matches the Accent Color (Thumb card) but is independent — changing the accent later won't override this. Click the FX icon to drive this from a DAX measure.",
+        value: { value: "#60A5FA" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
     });
     symbolInactiveColor = new formattingSettings.ColorPicker({
         name: "symbolInactiveColor", displayName: "Symbol Color (Inactive)",
-        description: "Color of the symbol on the non-selected side. Combined with Inactive Symbol α to produce the dimmed look.",
-        value: { value: "#94A3B8" }
+        description: "Color of the symbol on the non-selected side. Combined with Inactive Symbol α to produce the dimmed look. Click the FX icon to drive this from a DAX measure.",
+        value: { value: "#94A3B8" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
     });
     symbolInactiveAlpha = new formattingSettings.NumUpDown({
         name: "symbolInactiveAlpha", displayName: "Inactive Symbol α (×100)",
@@ -310,34 +333,34 @@ class TextCard extends FormattingSettingsCard {
         value: 55
     });
 
-    labelActiveColor_0    = new formattingSettings.ColorPicker({ name: "labelActiveColor_0",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
-    labelInactiveColor_0  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_0",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
-    symbolActiveColor_0   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_0",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
-    symbolInactiveColor_0 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_0", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    labelActiveColor_0    = new formattingSettings.ColorPicker({ name: "labelActiveColor_0",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" }, instanceKind: FX, selector: FX_SELECTOR });
+    labelInactiveColor_0  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_0",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolActiveColor_0   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_0",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolInactiveColor_0 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_0", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
     symbolInactiveAlpha_0 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_0", displayName: "Inactive Symbol α (×100)", value: 55 });
 
-    labelActiveColor_1    = new formattingSettings.ColorPicker({ name: "labelActiveColor_1",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
-    labelInactiveColor_1  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_1",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
-    symbolActiveColor_1   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_1",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
-    symbolInactiveColor_1 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_1", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    labelActiveColor_1    = new formattingSettings.ColorPicker({ name: "labelActiveColor_1",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" }, instanceKind: FX, selector: FX_SELECTOR });
+    labelInactiveColor_1  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_1",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolActiveColor_1   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_1",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolInactiveColor_1 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_1", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
     symbolInactiveAlpha_1 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_1", displayName: "Inactive Symbol α (×100)", value: 55 });
 
-    labelActiveColor_2    = new formattingSettings.ColorPicker({ name: "labelActiveColor_2",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
-    labelInactiveColor_2  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_2",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
-    symbolActiveColor_2   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_2",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
-    symbolInactiveColor_2 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_2", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    labelActiveColor_2    = new formattingSettings.ColorPicker({ name: "labelActiveColor_2",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" }, instanceKind: FX, selector: FX_SELECTOR });
+    labelInactiveColor_2  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_2",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolActiveColor_2   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_2",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolInactiveColor_2 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_2", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
     symbolInactiveAlpha_2 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_2", displayName: "Inactive Symbol α (×100)", value: 55 });
 
-    labelActiveColor_3    = new formattingSettings.ColorPicker({ name: "labelActiveColor_3",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
-    labelInactiveColor_3  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_3",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
-    symbolActiveColor_3   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_3",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
-    symbolInactiveColor_3 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_3", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    labelActiveColor_3    = new formattingSettings.ColorPicker({ name: "labelActiveColor_3",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" }, instanceKind: FX, selector: FX_SELECTOR });
+    labelInactiveColor_3  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_3",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolActiveColor_3   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_3",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolInactiveColor_3 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_3", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
     symbolInactiveAlpha_3 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_3", displayName: "Inactive Symbol α (×100)", value: 55 });
 
-    labelActiveColor_4    = new formattingSettings.ColorPicker({ name: "labelActiveColor_4",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" } });
-    labelInactiveColor_4  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_4",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" } });
-    symbolActiveColor_4   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_4",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" } });
-    symbolInactiveColor_4 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_4", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" } });
+    labelActiveColor_4    = new formattingSettings.ColorPicker({ name: "labelActiveColor_4",    displayName: "Label Color (Active)",     value: { value: "#F1F5F9" }, instanceKind: FX, selector: FX_SELECTOR });
+    labelInactiveColor_4  = new formattingSettings.ColorPicker({ name: "labelInactiveColor_4",  displayName: "Label Color (Inactive)",   value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolActiveColor_4   = new formattingSettings.ColorPicker({ name: "symbolActiveColor_4",   displayName: "Symbol Color (Active)",    value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
+    symbolInactiveColor_4 = new formattingSettings.ColorPicker({ name: "symbolInactiveColor_4", displayName: "Symbol Color (Inactive)",  value: { value: "#94A3B8" }, instanceKind: FX, selector: FX_SELECTOR });
     symbolInactiveAlpha_4 = new formattingSettings.NumUpDown   ({ name: "symbolInactiveAlpha_4", displayName: "Inactive Symbol α (×100)", value: 55 });
 
     name: string = "text";
@@ -366,8 +389,10 @@ class ThumbCard extends FormattingSettingsCard {
     });
     thumbGlowColor = new formattingSettings.ColorPicker({
         name: "thumbGlowColor", displayName: "Accent Color",
-        description: "Drives the thumb's tinted gradient, the active symbol color, and the glow ring + bloom hue. The dominant brand color of the visual.",
-        value: { value: "#60A5FA" }
+        description: "Drives the thumb's tinted gradient, the active symbol color, and the glow ring + bloom hue. The dominant brand color of the visual. Click the FX icon to drive this from a DAX measure.",
+        value: { value: "#60A5FA" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
     });
     thumbRingAlpha = new formattingSettings.NumUpDown({
         name: "thumbRingAlpha", displayName: "Ring α (×100)",
@@ -390,31 +415,31 @@ class ThumbCard extends FormattingSettingsCard {
         value: 18
     });
 
-    thumbGlowColor_0      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_0",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbGlowColor_0      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_0",      displayName: "Accent Color",             value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
     thumbRingAlpha_0      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_0",      displayName: "Ring α (×100)",           value: 18 });
     thumbBloomAlpha_0     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_0",     displayName: "Bloom α (×100)",          value: 45 });
     thumbGlowSpread_0     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_0",     displayName: "Bloom Spread (px)",        value: 14 });
     thumbHighlightAlpha_0 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_0", displayName: "Inner Highlight α (×100)", value: 18 });
 
-    thumbGlowColor_1      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_1",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbGlowColor_1      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_1",      displayName: "Accent Color",             value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
     thumbRingAlpha_1      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_1",      displayName: "Ring α (×100)",           value: 18 });
     thumbBloomAlpha_1     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_1",     displayName: "Bloom α (×100)",          value: 45 });
     thumbGlowSpread_1     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_1",     displayName: "Bloom Spread (px)",        value: 14 });
     thumbHighlightAlpha_1 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_1", displayName: "Inner Highlight α (×100)", value: 18 });
 
-    thumbGlowColor_2      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_2",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbGlowColor_2      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_2",      displayName: "Accent Color",             value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
     thumbRingAlpha_2      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_2",      displayName: "Ring α (×100)",           value: 18 });
     thumbBloomAlpha_2     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_2",     displayName: "Bloom α (×100)",          value: 45 });
     thumbGlowSpread_2     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_2",     displayName: "Bloom Spread (px)",        value: 14 });
     thumbHighlightAlpha_2 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_2", displayName: "Inner Highlight α (×100)", value: 18 });
 
-    thumbGlowColor_3      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_3",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbGlowColor_3      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_3",      displayName: "Accent Color",             value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
     thumbRingAlpha_3      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_3",      displayName: "Ring α (×100)",           value: 18 });
     thumbBloomAlpha_3     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_3",     displayName: "Bloom α (×100)",          value: 45 });
     thumbGlowSpread_3     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_3",     displayName: "Bloom Spread (px)",        value: 14 });
     thumbHighlightAlpha_3 = new formattingSettings.NumUpDown   ({ name: "thumbHighlightAlpha_3", displayName: "Inner Highlight α (×100)", value: 18 });
 
-    thumbGlowColor_4      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_4",      displayName: "Accent Color",             value: { value: "#60A5FA" } });
+    thumbGlowColor_4      = new formattingSettings.ColorPicker({ name: "thumbGlowColor_4",      displayName: "Accent Color",             value: { value: "#60A5FA" }, instanceKind: FX, selector: FX_SELECTOR });
     thumbRingAlpha_4      = new formattingSettings.NumUpDown   ({ name: "thumbRingAlpha_4",      displayName: "Ring α (×100)",           value: 18 });
     thumbBloomAlpha_4     = new formattingSettings.NumUpDown   ({ name: "thumbBloomAlpha_4",     displayName: "Bloom α (×100)",          value: 45 });
     thumbGlowSpread_4     = new formattingSettings.NumUpDown   ({ name: "thumbGlowSpread_4",     displayName: "Bloom Spread (px)",        value: 14 });

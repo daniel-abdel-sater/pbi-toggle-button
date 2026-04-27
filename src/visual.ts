@@ -24,6 +24,10 @@ interface ToggleItem {
     value: string;
     display: string;
     selectionId: ISelectionId;
+    /** First row index in cat.values where this distinct value appears. Used to read
+     *  per-row FX color outputs from cat.objects[rowIdx] when conditional formatting
+     *  rules are active on color properties. */
+    rowIdx: number;
 }
 
 interface ToggleState {
@@ -50,15 +54,13 @@ interface ToggleState {
     titleEl:  HTMLDivElement | null;
     wrapEl:   HTMLDivElement | null;
     toggleEl: HTMLDivElement | null;
-    btnAEl:   HTMLButtonElement | null;
-    btnBEl:   HTMLButtonElement | null;
-    btnCEl:   HTMLButtonElement | null;
-    symAEl:   HTMLSpanElement | null;
-    symBEl:   HTMLSpanElement | null;
-    symCEl:   HTMLSpanElement | null;
-    lblAEl:   HTMLSpanElement | null;
-    lblBEl:   HTMLSpanElement | null;
-    lblCEl:   HTMLSpanElement | null;
+    /** Per-side DOM refs, parallel arrays indexed by side position (0 = A, 1 = B, 2 = C, …).
+     *  Length matches the number of rendered buttons (= items.length at render time).
+     *  Generalized from named A/B/C refs so the visual handles any number of distinct
+     *  values up to whatever PBI's dataReductionAlgorithm delivers (top 10 by default). */
+    btnEls:   HTMLButtonElement[];
+    symEls:   HTMLSpanElement[];
+    lblEls:   HTMLSpanElement[];
     resizeObs: ResizeObserver | null;
 }
 
@@ -143,6 +145,12 @@ export class Visual implements IVisual {
                 cats.forEach((c, i) => {
                     const sample = (c.values || []).slice(0, 6).map(v => v == null ? "(blank)" : String(v));
                     this.log(`    cat[${i}] qn=${c.source?.queryName} len=${c.values?.length} sample=[${sample.join(", ")}]`);
+                    if (c.objects && c.objects.length > 0) {
+                        const objSample = c.objects.slice(0, 4).map((o, oi) => `r${oi}=${o ? JSON.stringify(o) : "null"}`);
+                        this.log(`    cat[${i}] objects: ${objSample.join(" | ")}`);
+                    } else {
+                        this.log(`    cat[${i}] objects: NONE (PBI didn't emit per-row property values)`);
+                    }
                 });
                 vals.forEach((v, i) => {
                     const arr = v.values || [];
@@ -255,7 +263,7 @@ export class Visual implements IVisual {
                 this.commitSelections();
                 this.persistAll();
             }
-            const anyRenderable = this.toggles.some(t => t.items.length >= 1 && t.items.length <= 3);
+            const anyRenderable = this.toggles.some(t => t.items.length >= 1);
             if (anyError && !anyRenderable) {
                 // No usable toggles at all → show error reflecting the first problem
                 this.renderError(errorCounts[0] ?? 0);
@@ -451,6 +459,36 @@ export class Visual implements IVisual {
         return clr(slice as formattingSettings.ColorPicker, fallback);
     }
 
+    /** Resolve a color for a SPECIFIC ROW of a category column. With per-row FX rule
+     *  metadata (capabilities `rule.inputRole: "field"`, `output.selector: ["field"]`)
+     *  and the wildcard slice selector, PBI emits per-row resolved colors on
+     *  `cat.objects[rowIdx][card][propertyName]`.
+     *
+     *  Apply-to slot system: when the author sets the FX rule from the "All toggles"
+     *  dropdown, PBI keys the output under the unprefixed prop name ("thumbGlowColor").
+     *  When they set it from a per-toggle view, it's keyed under the slot variant
+     *  ("thumbGlowColor_2"). We try the slot variant FIRST (per-toggle override wins),
+     *  then the all-default. Falls through to the constant resolveColor chain when no
+     *  FX output is present. */
+    private colorForRow(tog: ToggleState, rowIdx: number, cardName: string, propName: string, fallback: string): string {
+        if (tog.cat?.objects && rowIdx >= 0) {
+            const row = tog.cat.objects[rowIdx] as Record<string, Record<string, unknown> | undefined> | undefined;
+            const cardObj = row?.[cardName];
+            if (cardObj) {
+                const slotIdx = this.cardIndexMaps[cardName]?.[tog.queryName];
+                const keys: string[] = (typeof slotIdx === "number")
+                    ? [`${propName}_${slotIdx}`, propName]
+                    : [propName];
+                for (const key of keys) {
+                    const obj = (cardObj as Record<string, unknown>)[key] as { solid?: { color?: string } } | undefined;
+                    const c = obj?.solid?.color;
+                    if (typeof c === "string" && c !== "") return c;
+                }
+            }
+        }
+        return this.resolveColor(cardName, propName, tog.queryName, fallback);
+    }
+
     private resolveBool(cardName: string, propName: string, qn: string, fallback: boolean): boolean {
         const v = this.resolveCardProp(cardName, propName, qn);
         if (typeof v === "boolean") return v;
@@ -503,9 +541,7 @@ export class Visual implements IVisual {
             lastDriverVal: null,
             lastSortKey: "",
             blockEl: null, titleEl: null, wrapEl: null, toggleEl: null,
-            btnAEl: null, btnBEl: null, btnCEl: null,
-            symAEl: null, symBEl: null, symCEl: null,
-            lblAEl: null, lblBEl: null, lblCEl: null,
+            btnEls: [], symEls: [], lblEls: [],
             resizeObs: null
         };
     }
@@ -603,7 +639,10 @@ export class Visual implements IVisual {
             if (seen.has(k)) continue;
             seen.add(k);
             distinct.push({ raw: values[r], idx: r });
-            if (distinct.length >= 4) break;  // collect up to 4 to detect n>=4 ("too many")
+            // No upper cap — let the visual render whatever PBI's dataReductionAlgorithm
+            // delivers (top 10 by default). The toggle pill stretches via flexbox so any
+            // count fits; symbols A/B/C are the only labelled positions, sides D+ render
+            // label-only.
         }
         const n = distinct.length;
 
@@ -625,10 +664,10 @@ export class Visual implements IVisual {
         // Helper: rebuild items in cached order when the value SET matches cache, else
         // rebuild in cat order and reset cache. Always uses fresh selectionIds (PBI's
         // QueryGenerator needs current SQExpr at applyJsonFilter time).
-        const rebuildItemsForN = (expectedN: 2 | 3): void => {
+        const rebuildItemsForN = (expectedN: number): void => {
             const currentValues = distinct.map(d => d.raw == null ? "(blank)" : String(d.raw));
             const cachedValues = tog.cachedItems.map(i => i.value);
-            // Set-equality preserves cached A/B/C order against PBI cross-product reshuffles.
+            // Set-equality preserves cached A/B/… order against PBI cross-product reshuffles.
             // BUT: a real sort-by-column change also reshuffles cat.values; in that case we
             // WANT to rebuild in the new (sort-by-column-driven) order. sortChanged forces
             // the rebuild branch even when the value set itself is unchanged.
@@ -642,7 +681,7 @@ export class Visual implements IVisual {
                     const sid = this.host.createSelectionIdBuilder()
                         .withCategory(cat, d!.idx)
                         .createSelectionId();
-                    return { value: cv, display: cv, selectionId: sid };
+                    return { value: cv, display: cv, selectionId: sid, rowIdx: d!.idx };
                 });
             } else {
                 tog.items = distinct.map((d) => {
@@ -650,15 +689,15 @@ export class Visual implements IVisual {
                         .withCategory(cat, d.idx)
                         .createSelectionId();
                     const display = d.raw == null ? "(blank)" : String(d.raw);
-                    return { value: display, display, selectionId: sid };
+                    return { value: display, display, selectionId: sid, rowIdx: d.idx };
                 });
                 tog.cachedItems = tog.items;
                 tog.hasRestoredSelection = false;
             }
         };
 
-        if (n === 2 || n === 3) {
-            rebuildItemsForN(n as 2 | 3);
+        if (n >= 2) {
+            rebuildItemsForN(n);
 
             // Driver evaluation — drives first-bind default and post-bind re-eval when
             // the measure's chosen default changes (context shift). lastDriverVal tells
@@ -692,10 +731,24 @@ export class Visual implements IVisual {
             } else if (driverChanged && driverInItems) {
                 this.log(`  parseToggle(${tog.queryName}) n=${n}: driver re-fired ${tog.selectedValue} → ${driverVal}`);
                 tog.selectedValue = driverVal;
+            } else if (tog.selectedValue == null &&
+                this.resolveBool("selection", "forceSelection", tog.queryName, false)) {
+                // Force-Selection retroactivity: the toggle is currently cleared AND
+                // Force Selection is now ON. Re-select to the driver value if available,
+                // else default A. Catches the case where the author flips Force ON after
+                // the user has already deselected.
+                if (driverInItems) {
+                    tog.selectedValue = driverVal;
+                    this.log(`  parseToggle(${tog.queryName}) n=${n}: force-reactivate (driver)=${driverVal}`);
+                } else {
+                    tog.selectedValue = tog.items[0].value;
+                    this.log(`  parseToggle(${tog.queryName}) n=${n}: force-reactivate (default A)=${tog.items[0].value}`);
+                }
             } else {
                 // Cascade-reset: if the upstream selection invalidated this toggle's
                 // current non-null selectedValue, snap to the first available value.
-                // null is "user deliberately cleared" — never cascade-reset over null.
+                // null is "user deliberately cleared" — never cascade-reset over null
+                // (unless Force is ON, handled in the branch above).
                 const stillValid = tog.selectedValue == null ||
                                    tog.items.some(it => it.value === tog.selectedValue);
                 if (!stillValid) {
@@ -717,7 +770,8 @@ export class Visual implements IVisual {
             tog.items = [{
                 value: display,
                 display,
-                selectionId: this.host.createSelectionIdBuilder().withCategory(cat, v.idx).createSelectionId()
+                selectionId: this.host.createSelectionIdBuilder().withCategory(cat, v.idx).createSelectionId(),
+                rowIdx: v.idx
             }];
             if (!cachedSame) {
                 tog.cachedItems = tog.items;
@@ -743,6 +797,11 @@ export class Visual implements IVisual {
                 // Cascade-reset (n=1): only one option available, snap to it.
                 tog.selectedValue = display;
                 this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1) → ${tog.selectedValue}`);
+            } else if (tog.selectedValue == null &&
+                this.resolveBool("selection", "forceSelection", tog.queryName, false)) {
+                // Force-Selection retroactivity (n=1).
+                tog.selectedValue = display;
+                this.log(`  parseToggle(${tog.queryName}): force-reactivate (n=1) → ${tog.selectedValue}`);
             } else {
                 this.log(`  parseToggle(${tog.queryName}): preserve selectedValue=${tog.selectedValue} (n=1)`);
             }
@@ -863,15 +922,13 @@ export class Visual implements IVisual {
 
     // ── Click handling ─────────────────────────────────────────────────
 
-    private onButtonClick(toggleIdx: number, side: "A" | "B" | "C"): void {
+    private onButtonClick(toggleIdx: number, sideIdx: number): void {
         const tog = this.toggles[toggleIdx];
-        if (!tog || tog.items.length === 0 || tog.items.length > 3) return;
-        const sideIdx = side === "A" ? 0 : side === "B" ? 1 : 2;
-        // Side C only valid on n=3; side B only valid on n>=2.
-        if (sideIdx >= tog.items.length) return;
+        if (!tog || tog.items.length === 0) return;
+        if (sideIdx < 0 || sideIdx >= tog.items.length) return;
         const clicked = tog.items[sideIdx];
         if (!clicked) return;
-        this.log(`onButtonClick(idx=${toggleIdx} qn=${tog.queryName} side=${side} clicked=${clicked.value} prevSelected=${tog.selectedValue})`);
+        this.log(`onButtonClick(idx=${toggleIdx} qn=${tog.queryName} side=${sideIdx} clicked=${clicked.value} prevSelected=${tog.selectedValue})`);
         if (tog.selectedValue === clicked.value) {
             // Click the already-selected button → clear (toggle off) — UNLESS Selection
             // Mode → Force Selection is ON for this toggle, in which case the click is
@@ -885,6 +942,7 @@ export class Visual implements IVisual {
             this.commitSelections();
             this.persistAll();
             this.refreshActiveClasses(tog);
+            this.applyButtonColors(tog);
             this.positionThumb(tog);
             this.log(`  → toggled off`);
             return;
@@ -894,21 +952,54 @@ export class Visual implements IVisual {
         this.commitSelections();
         this.persistAll();
         this.refreshActiveClasses(tog);
+        this.applyButtonColors(tog);
         this.positionThumb(tog);
     }
 
     private refreshActiveClasses(tog: ToggleState): void {
-        if (!tog.btnAEl || !tog.btnBEl) return;
-        const isA = !!(tog.items[0] && tog.selectedValue === tog.items[0].value);
-        const isB = !!(tog.items[1] && tog.selectedValue === tog.items[1].value);
-        const isC = !!(tog.items[2] && tog.selectedValue === tog.items[2].value);
-        tog.btnAEl.classList.toggle("is-active", isA);
-        tog.btnBEl.classList.toggle("is-active", isB);
-        tog.btnAEl.setAttribute("aria-pressed", String(isA));
-        tog.btnBEl.setAttribute("aria-pressed", String(isB));
-        if (tog.btnCEl) {
-            tog.btnCEl.classList.toggle("is-active", isC);
-            tog.btnCEl.setAttribute("aria-pressed", String(isC));
+        for (let i = 0; i < tog.btnEls.length; i++) {
+            const item = tog.items[i];
+            const isActive = !!(item && tog.selectedValue === item.value);
+            tog.btnEls[i].classList.toggle("is-active", isActive);
+            tog.btnEls[i].setAttribute("aria-pressed", String(isActive));
+        }
+    }
+
+    /** Per-button label/symbol color + active-row thumb glow color application. Reads
+     *  per-row FX colors from cat.objects when conditional formatting rules are active
+     *  (capabilities `rule.inputRole: "field"`) so each button gets its own value-driven
+     *  color and the thumb glow follows the currently-selected button's row. */
+    private applyButtonColors(tog: ToggleState): void {
+        // Per-button label/symbol colors
+        for (let i = 0; i < tog.btnEls.length; i++) {
+            const item = tog.items[i];
+            const lblEl = tog.lblEls[i];
+            const symEl = tog.symEls[i];
+            if (!item || !lblEl || !symEl) continue;
+            const isActive = item.value === tog.selectedValue;
+            const labelColor = isActive
+                ? this.colorForRow(tog, item.rowIdx, "text", "labelActiveColor",   "#F1F5F9")
+                : this.colorForRow(tog, item.rowIdx, "text", "labelInactiveColor", "#94A3B8");
+            const symColor = isActive
+                ? this.colorForRow(tog, item.rowIdx, "text", "symbolActiveColor",   "#60A5FA")
+                : this.colorForRow(tog, item.rowIdx, "text", "symbolInactiveColor", "#94A3B8");
+            lblEl.style.color = labelColor;
+            symEl.style.color = symColor;
+        }
+
+        // Thumb glow color follows the ACTIVE button's row (only that button's glow shows)
+        const blk = tog.blockEl;
+        if (blk) {
+            const activeIdx = tog.items.findIndex(it => it.value === tog.selectedValue);
+            const activeRowIdx = activeIdx >= 0 ? tog.items[activeIdx].rowIdx : -1;
+            const accentHex = activeRowIdx >= 0
+                ? this.colorForRow(tog, activeRowIdx, "thumb", "thumbGlowColor", "#60A5FA")
+                : this.resolveColor("thumb", "thumbGlowColor", tog.queryName, "#60A5FA");
+            const accentTriplet = hexToRgbTriplet(accentHex);
+            blk.style.setProperty("--thumb-glow-color", accentTriplet);
+            blk.style.setProperty("--thumb-bg-top", `rgba(${accentTriplet}, 0.18)`);
+            blk.style.setProperty("--thumb-bg-bot", `rgba(${accentTriplet}, 0.06)`);
+            blk.style.setProperty("--thumb-border", `rgba(${accentTriplet}, 0.35)`);
         }
     }
 
@@ -919,9 +1010,7 @@ export class Visual implements IVisual {
         for (const t of this.toggles) {
             if (t.resizeObs) { t.resizeObs.disconnect(); t.resizeObs = null; }
             t.blockEl = null; t.titleEl = null; t.wrapEl = null; t.toggleEl = null;
-            t.btnAEl = null; t.btnBEl = null; t.btnCEl = null;
-            t.symAEl = null; t.symBEl = null; t.symCEl = null;
-            t.lblAEl = null; t.lblBEl = null; t.lblCEl = null;
+            t.btnEls = []; t.symEls = []; t.lblEls = [];
         }
         while (this.root.firstChild) this.root.removeChild(this.root.firstChild);
         for (const cls of POSITION_CLASSES) this.root.classList.remove(cls);
@@ -939,7 +1028,7 @@ export class Visual implements IVisual {
         title.textContent = "Toggle Button";
         const sub = document.createElement("div");
         sub.className = "tb-landing-sub";
-        sub.textContent = "Bind 1–5 fields. Each must have 1 to 3 distinct values.";
+        sub.textContent = "Bind 1–5 fields. Each toggle renders one button per distinct value (no fixed upper limit, capped by Power BI's data reduction).";
         box.appendChild(title);
         box.appendChild(sub);
         this.root.appendChild(box);
@@ -952,12 +1041,10 @@ export class Visual implements IVisual {
         box.className = "tb-landing tb-error";
         const title = document.createElement("div");
         title.className = "tb-landing-title";
-        title.textContent = n === 0 ? "No data" : "Too many values";
+        title.textContent = "No data";
         const sub = document.createElement("div");
         sub.className = "tb-landing-sub";
-        sub.textContent = n === 0
-            ? "Bound field has no rows."
-            : `Bound field has ${n} distinct values. Use a field with 1 to 3 distinct values.`;
+        sub.textContent = "Bound field has no rows.";
         box.appendChild(title);
         box.appendChild(sub);
         this.root.appendChild(box);
@@ -1024,7 +1111,7 @@ export class Visual implements IVisual {
         // Render one .tb-block per toggle, with per-toggle resolved Title + Content fields
         for (let i = 0; i < this.toggles.length; i++) {
             const tog = this.toggles[i];
-            if (tog.items.length < 1 || tog.items.length > 3) continue;
+            if (tog.items.length < 1) continue;
             const t = this.resolveTitleForToggle(tog.queryName);
             const c = this.resolveContentForToggle(tog.queryName);
             this.renderToggleBlock(tog, i, {
@@ -1066,14 +1153,17 @@ export class Visual implements IVisual {
         toggle.setAttribute("role", "group");
         tog.toggleEl = toggle;
 
-        const buildBtn = (side: "A" | "B" | "C"): { btn: HTMLButtonElement; sym: HTMLSpanElement; lbl: HTMLSpanElement } => {
+        // Build one button per item. Symbol slots only exist for the first three sides
+        // (A/B/C in the format pane); sides 3+ render label-only.
+        const buildBtn = (sideIdx: number): { btn: HTMLButtonElement; sym: HTMLSpanElement; lbl: HTMLSpanElement } => {
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.className = `tb-btn tb-btn-${side.toLowerCase()}`;
+            // Letter class for the first three sides, numeric class beyond that.
+            const sideTag = sideIdx <= 2 ? ["a", "b", "c"][sideIdx] : String(sideIdx);
+            btn.className = `tb-btn tb-btn-${sideTag}`;
 
-            const sideIdx = side === "A" ? 0 : side === "B" ? 1 : 2;
             const item = tog.items[sideIdx];
-            const sideSym = side === "A" ? opts.symA : side === "B" ? opts.symB : opts.symC;
+            const sideSym = sideIdx === 0 ? opts.symA : sideIdx === 1 ? opts.symB : sideIdx === 2 ? opts.symC : "";
 
             const sym = document.createElement("span");
             sym.className = "tb-sym";
@@ -1088,10 +1178,8 @@ export class Visual implements IVisual {
             btn.appendChild(sym);
             btn.appendChild(lbl);
             if (item) {
-                btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(idx, side); });
+                btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(idx, sideIdx); });
             } else {
-                // No item for this side (n=1 lacks B+C; n=2 lacks C). Hide the button so
-                // .tb-toggle has only as many visible children as items.length.
                 btn.style.display = "none";
                 btn.setAttribute("aria-hidden", "true");
                 btn.tabIndex = -1;
@@ -1099,18 +1187,19 @@ export class Visual implements IVisual {
             return { btn, sym, lbl };
         };
 
-        const a = buildBtn("A");
-        const b = buildBtn("B");
-        const c = buildBtn("C");
-        toggle.appendChild(a.btn);
-        toggle.appendChild(b.btn);
-        toggle.appendChild(c.btn);
+        tog.btnEls = [];
+        tog.symEls = [];
+        tog.lblEls = [];
+        const sideCount = Math.max(tog.items.length, 1);
+        for (let i = 0; i < sideCount; i++) {
+            const { btn, sym, lbl } = buildBtn(i);
+            toggle.appendChild(btn);
+            tog.btnEls.push(btn);
+            tog.symEls.push(sym);
+            tog.lblEls.push(lbl);
+        }
         wrap.appendChild(toggle);
         block.appendChild(wrap);
-
-        tog.btnAEl = a.btn; tog.symAEl = a.sym; tog.lblAEl = a.lbl;
-        tog.btnBEl = b.btn; tog.symBEl = b.sym; tog.lblBEl = b.lbl;
-        tog.btnCEl = c.btn; tog.symCEl = c.sym; tog.lblCEl = c.lbl;
 
         this.refreshActiveClasses(tog);
 
@@ -1125,15 +1214,15 @@ export class Visual implements IVisual {
 
     /** Compute --thumb-x and --thumb-w from active button rect relative to track for ONE toggle. */
     private positionThumb(tog: ToggleState): void {
-        if (!tog.toggleEl || !tog.btnAEl || !tog.btnBEl) return;
+        if (!tog.toggleEl || tog.btnEls.length === 0) return;
         // Cleared state: hide thumb (no active button to slide over).
         if (tog.selectedValue == null) {
             tog.toggleEl.classList.remove("tb-ready");
             return;
         }
-        const isC = !!(tog.items[2] && tog.selectedValue === tog.items[2].value);
-        const isB = !!(tog.items[1] && tog.selectedValue === tog.items[1].value);
-        const active = isC && tog.btnCEl ? tog.btnCEl : isB ? tog.btnBEl : tog.btnAEl;
+        const activeIdx = tog.items.findIndex(it => it.value === tog.selectedValue);
+        const active = activeIdx >= 0 ? tog.btnEls[activeIdx] : tog.btnEls[0];
+        if (!active) return;
 
         // Reset any prior overflow-safety transform so getBoundingClientRect is unscaled
         const priorTransform = tog.toggleEl.style.transform;
@@ -1244,23 +1333,21 @@ export class Visual implements IVisual {
 
         // ── Per-toggle Content patching: text content, visibility classes, font sizes (CSS vars on each block)
         for (const t of this.toggles) {
-            if (!t.toggleEl || !t.symAEl || !t.symBEl || !t.lblAEl || !t.lblBEl) continue;
+            if (!t.toggleEl || t.btnEls.length === 0) continue;
             const c = this.resolveContentForToggle(t.queryName);
-            const hasC = t.items.length >= 3;
 
-            // Symbols + labels (text + visibility patched in place — no DOM rebuild)
-            t.symAEl.textContent = c.symbolA;
-            t.symBEl.textContent = c.symbolB;
-            t.symAEl.classList.toggle("is-hidden", !c.showSymbols || !c.symbolA);
-            t.symBEl.classList.toggle("is-hidden", !c.showSymbols || !c.symbolB);
-            t.lblAEl.classList.toggle("is-hidden", !c.showLabels);
-            t.lblBEl.classList.toggle("is-hidden", !c.showLabels);
-            // Side C: live-patch text + visibility, gated by hasC (n=3) and the symbolC value.
-            if (t.symCEl) {
-                t.symCEl.textContent = c.symbolC;
-                t.symCEl.classList.toggle("is-hidden", !c.showSymbols || !c.symbolC || !hasC);
+            // Symbols + labels — patch in place per side (no DOM rebuild). Symbol slots
+            // exist only for sides 0/1/2 (A/B/C); sides 3+ render label-only.
+            for (let i = 0; i < t.btnEls.length; i++) {
+                const item = t.items[i];
+                const sym = t.symEls[i];
+                const lbl = t.lblEls[i];
+                if (!sym || !lbl) continue;
+                const sideSym = i === 0 ? c.symbolA : i === 1 ? c.symbolB : i === 2 ? c.symbolC : "";
+                sym.textContent = sideSym;
+                sym.classList.toggle("is-hidden", !c.showSymbols || !sideSym || !item);
+                lbl.classList.toggle("is-hidden", !c.showLabels || !item);
             }
-            if (t.lblCEl) t.lblCEl.classList.toggle("is-hidden", !c.showLabels || !hasC);
 
             // Per-block font-size CSS vars (overrides root-level vars for this block only)
             const labelFs  = Math.max(6, Math.min(72, c.labelFontSize  || 12));
@@ -1302,14 +1389,9 @@ export class Visual implements IVisual {
             if (!t.blockEl) continue;
             const blk = t.blockEl as HTMLDivElement;
 
-            // Thumb (resolved per toggle)
-            const accentHex = this.resolveColor("thumb", "thumbGlowColor", t.queryName, "#60A5FA");
-            const accentTriplet = hexToRgbTriplet(accentHex);
-            blk.style.setProperty("--thumb-glow-color", accentTriplet);
-            blk.style.setProperty("--thumb-bg-top", `rgba(${accentTriplet}, 0.18)`);
-            blk.style.setProperty("--thumb-bg-bot", `rgba(${accentTriplet}, 0.06)`);
-            blk.style.setProperty("--thumb-border", `rgba(${accentTriplet}, 0.35)`);
-
+            // Thumb non-color knobs (alphas, spread). The thumb glow COLOR is set by
+            // applyButtonColors() at the end of this loop — it depends on the active
+            // button's row, not the toggle as a whole, so it can flow through FX rules.
             const ringα  = Math.max(0, Math.min(100, this.resolveNum("thumb", "thumbRingAlpha",      t.queryName, 18))) / 100;
             const bloomα = Math.max(0, Math.min(100, this.resolveNum("thumb", "thumbBloomAlpha",     t.queryName, 45))) / 100;
             const spread = Math.max(0, Math.min(80,  this.resolveNum("thumb", "thumbGlowSpread",     t.queryName, 14)));
@@ -1319,13 +1401,17 @@ export class Visual implements IVisual {
             blk.style.setProperty("--thumb-glow-spread",   spread + "px");
             blk.style.setProperty("--thumb-inner-hl",      `rgba(255,255,255,${hlα})`);
 
-            // Text (resolved per toggle)
+            // Text colors — per-button inline style so per-row FX outputs land on the
+            // correct button. Block-level fallbacks via CSS vars stay set for the (rare)
+            // case where lblEls / symEls are missing.
             blk.style.setProperty("--label-active-color",    this.resolveColor("text", "labelActiveColor",    t.queryName, "#F1F5F9"));
             blk.style.setProperty("--label-color",            this.resolveColor("text", "labelInactiveColor",  t.queryName, "#94A3B8"));
             blk.style.setProperty("--symbol-color-active",   this.resolveColor("text", "symbolActiveColor",   t.queryName, "#60A5FA"));
             blk.style.setProperty("--symbol-color-inactive", this.resolveColor("text", "symbolInactiveColor", t.queryName, "#94A3B8"));
             const symα = Math.max(0, Math.min(100, this.resolveNum("text", "symbolInactiveAlpha", t.queryName, 55))) / 100;
             blk.style.setProperty("--symbol-opacity-inactive", String(symα));
+
+            this.applyButtonColors(t);
         }
 
         // ── Animation

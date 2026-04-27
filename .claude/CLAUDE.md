@@ -79,3 +79,20 @@ pbiviz.json          — API 5.11.0
 **Generalized rule:** When a custom visual binds multiple fields to a single `for.in` mapping, do NOT rely on `.equals()` between selectionIds built from different `idx` values of the same cat — they share column-level expressions and false-positive match. Per-field selection state must be owned by the visual (click handler + persisted state), not derived from `getSelectionIds()`. For true per-field independent filtering (slicer-style), prefer `host.applyJsonFilter` with per-field IBasicFilter — selectionManager is for highlight/select-data-points semantics that don't compose across multiple fields.
 
 ---
+
+### Per-row FX on Apply-to slot system: wildcard selector + slot-aware reader
+[retry-lesson] [date: 2026-04-27]
+
+**Context:** Adding FX (conditional formatting) to the 5 ColorPickers (`thumb.thumbGlowColor` + 4 `text.*` colors). Each ColorPicker has the §3.5 Apply-to slot system: `prop`, `prop_0..prop_4` for per-toggle overrides. We added `instanceKind: ConstantOrRule` per CLAUDE.md §P25 and the corresponding capability `rule` metadata. Author wrote a SWITCH(SELECTEDVALUE…) DAX measure expecting per-row colors. Result: **one color cascaded to every toggle button.**
+
+**First attempt that failed:** Just `instanceKind: ConstantOrRule` + `rule` capability metadata. Diagnostic showed `cat.objects: NONE` — PBI evaluated the rule once per visual in overall filter context and returned a single color, did not emit per-row outputs.
+
+**Second attempt that failed:** Added `selector: FX_SELECTOR` (inline `{ data: [{ dataViewWildcard: { matchingOption: 0 } }] }`) to enable per-row emission. Diagnostic now showed populated `cat.objects: r0={"thumb":{"thumbGlowColor_1":...}}` — per-row colors WERE in the metadata, but the visual still cascaded one color. Why: the author had set the FX rule from the per-toggle "Apply to: Toggle 2" view in the format pane, so PBI keyed the output under the slot variant **`thumbGlowColor_1`**, not the unprefixed `thumbGlowColor`. Our `colorForRow` reader only looked at the unprefixed name.
+
+**Root cause:** With the Apply-to slot system, the FX output property name follows whichever Apply-to view the author was editing. "All toggles" → unprefixed; per-toggle slot → `prop_<slotIdx>`. Reader must check both.
+
+**Solution:** `colorForRow` now tries `prop_<slotIdx>` first (per-toggle override wins), then `prop` (all-default), before falling back to the constant `resolveColor` chain. Slot index resolved from `cardIndexMaps[card][queryName]` — the same indexMap that drives the format-pane visibility. Generic over all 5 FX-enabled colors (one helper, all callers benefit).
+
+**Generalized to parent CLAUDE.md §11.0d** — full four-piece protocol for per-row FX on categorical visuals (instanceKind + capability rule + wildcard selector + slot-aware reader).
+
+---
