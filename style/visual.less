@@ -230,14 +230,16 @@
             background var(--transition-duration) var(--transition-ease),
             color      var(--transition-duration) var(--transition-ease);
 
-        /* Hover preview on inactive buttons: dimmed version of the thumb's gradient,
-           same accent color (--thumb-glow-color). Visually communicates "click here
-           to slide the thumb to this side" without animating the thumb itself. */
+        /* Hover preview on inactive buttons: dimmed version of the thumb's gradient
+           using THE HOVERED BUTTON'S OWN row color (`--btn-glow-color`, set per
+           button by applyButtonColors based on each item's FX-resolved color).
+           Falls back to the block-level `--thumb-glow-color` if the per-button var
+           isn't set. Visually previews the color this button would glow with on click. */
         &:hover:not(.is-active) {
             background: linear-gradient(180deg,
-                rgba(var(--thumb-glow-color), 0.16),
-                rgba(var(--thumb-glow-color), 0.05));
-            box-shadow: inset 0 0 0 1px rgba(var(--thumb-glow-color), 0.18);
+                rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.16),
+                rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.05));
+            box-shadow: inset 0 0 0 1px rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.18);
         }
 
         &:focus-visible {

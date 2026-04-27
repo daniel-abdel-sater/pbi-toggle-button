@@ -1010,17 +1010,18 @@ export class Visual implements IVisual {
         }
     }
 
-    /** Per-button label/symbol color + active-row thumb glow color application. Reads
-     *  per-row FX colors from cat.objects when conditional formatting rules are active
-     *  (capabilities `rule.inputRole: "field"`) so each button gets its own value-driven
-     *  color and the thumb glow follows the currently-selected button's row. */
+    /** Per-button label/symbol color + per-button glow + active-row thumb glow.
+     *  Each button gets its OWN `--btn-glow-color` CSS variable based on its row's FX
+     *  color, so the hover preview matches the hovered button (not the active button's
+     *  color). The block-level `--thumb-glow-color` still drives the active thumb. */
     private applyButtonColors(tog: ToggleState): void {
-        // Per-button label/symbol colors
+        // Per-button colors: label, symbol, AND per-button glow color (drives hover preview)
         for (let i = 0; i < tog.btnEls.length; i++) {
             const item = tog.items[i];
+            const btnEl = tog.btnEls[i];
             const lblEl = tog.lblEls[i];
             const symEl = tog.symEls[i];
-            if (!item || !lblEl || !symEl) continue;
+            if (!item || !btnEl || !lblEl || !symEl) continue;
             const isActive = item.value === tog.selectedValue;
             const labelColor = isActive
                 ? this.colorForRow(tog, item.rowIdx, "text", "labelActiveColor",   "#F1F5F9")
@@ -1028,8 +1029,10 @@ export class Visual implements IVisual {
             const symColor = isActive
                 ? this.colorForRow(tog, item.rowIdx, "text", "symbolActiveColor",   "#60A5FA")
                 : this.colorForRow(tog, item.rowIdx, "text", "symbolInactiveColor", "#94A3B8");
+            const btnGlowHex = this.colorForRow(tog, item.rowIdx, "thumb", "thumbGlowColor", "#60A5FA");
             lblEl.style.color = labelColor;
             symEl.style.color = symColor;
+            btnEl.style.setProperty("--btn-glow-color", hexToRgbTriplet(btnGlowHex));
         }
 
         // Thumb glow color follows the ACTIVE button's row (only that button's glow shows)
