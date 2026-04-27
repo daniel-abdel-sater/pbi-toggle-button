@@ -39,6 +39,12 @@ interface ToggleState {
     cachedFieldQueryName: string | null;
     hasRestoredSelection: boolean;
     selectedValue: string | null;
+    /** Full active set. In single-select mode this contains 0 or 1 entry that mirrors
+     *  selectedValue. In multi-select mode this can grow to N entries; selectedValue
+     *  tracks the most recently clicked one (used as the thumb anchor when the set
+     *  briefly drops to 1, and for cascade-display fallbacks). Always kept in sync
+     *  with selectedValue via setSelection/addSelection/removeSelection/clearSelection. */
+    selectedSet: Set<string>;
     /** Last value the `defaultValue` Measure flagged as truthy, kept across updates so we
      *  can detect when the measure's chosen default changes (context shift) and slide the
      *  thumb to the new side. null = no driver bound or no truthy row. */
@@ -102,11 +108,11 @@ export class Visual implements IVisual {
     private currentDv: DataView | undefined;
     // <cardName, <queryName, slotIdx>> — populated from `<card>.<card>IndexMap` in metadata; used
     // to resolve per-toggle slot reads. Stays stable across rebindings.
-    private cardIndexMaps: Record<string, Record<string, number>> = { title: {}, content: {}, text: {}, thumb: {}, selection: {} };
+    private cardIndexMaps: Record<string, Record<string, number>> = { title: {}, content: {}, text: {}, thumb: {}, selection: {}, spacing: {} };
     // <cardName, "all" | "toggle:<queryName>"> — read from metadata directly per §11.0c.
-    private activeViewByCard: Record<string, string> = { title: "all", content: "all", text: "all", thumb: "all", selection: "all" };
+    private activeViewByCard: Record<string, string> = { title: "all", content: "all", text: "all", thumb: "all", selection: "all", spacing: "all" };
     // Cards that have the Apply-to dropdown wired (grow this list as B2/C1/C2 land)
-    private static readonly PER_TOGGLE_CARDS: ReadonlyArray<"title"|"content"|"text"|"thumb"|"selection"> = ["title", "content", "text", "thumb", "selection"];
+    private static readonly PER_TOGGLE_CARDS: ReadonlyArray<"title"|"content"|"text"|"thumb"|"selection"|"spacing"> = ["title", "content", "text", "thumb", "selection", "spacing"];
 
     private log(...args: unknown[]): void {
         if (!TB_DEBUG) return;
@@ -243,12 +249,17 @@ export class Visual implements IVisual {
             // based on what's in liveSelIds — when two instances of this visual are bound
             // to the same fields with different selections, that turns into a flip-flop
             // loop where each instance keeps overwriting the other's commit.
-            const prevSelections: (string | null)[] = this.toggles.map(t => t.selectedValue);
+            // Compare the FULL set per toggle (sorted) so multi-select changes are detected
+            const prevSelections: string[] = this.toggles.map(t =>
+                Array.from(t.selectedSet).sort().join("␟"));
 
             // Slicer-style cascade: each toggle's available values are filtered by the
             // selections of all upstream toggles (j < i). `constraints` is built incrementally
             // so toggle i sees toggles 0..i-1 with their freshly-parsed selections.
-            const constraints: (string | null)[] = new Array(this.toggles.length).fill(null);
+            // string[] | null  →  null = no constraint (cleared toggle), array = OR-match
+            // (multi-select sends N values; single-select sends [primary]). Empty array
+            // is normalized to null at the use-site to keep downstream code simple.
+            const constraints: (string[] | null)[] = new Array(this.toggles.length).fill(null);
             let anyError = false;
             const errorCounts: number[] = [];
             for (let i = 0; i < this.toggles.length; i++) {
@@ -257,13 +268,17 @@ export class Visual implements IVisual {
                     anyError = true;
                     errorCounts.push(ok.distinctCount);
                 }
-                constraints[i] = this.toggles[i].selectedValue;
+                const t = this.toggles[i];
+                constraints[i] = t.selectedSet.size > 0 ? Array.from(t.selectedSet) : null;
             }
 
             // Commit + persist only when MY-OWN selectedValue changed during parse.
             // This catches first-bind force-default and cascade-reset, but stays silent
             // on plain preserve passes — which is exactly what breaks the multi-instance loop.
-            const selectionsChanged = this.toggles.some((t, i) => t.selectedValue !== prevSelections[i]);
+            const selectionsChanged = this.toggles.some((t, i) => {
+                const cur = Array.from(t.selectedSet).sort().join("␟");
+                return cur !== prevSelections[i];
+            });
             if (selectionsChanged) {
                 this.log(`selectionsChanged → commit & persist`);
                 this.commitSelections();
@@ -292,9 +307,13 @@ export class Visual implements IVisual {
             // count, queryNames, title visibility, title position, symbol presence)
             // remain so a real structural change still triggers renderAll.
             const togglesKey = this.toggles.map(t => {
-                const tShowTitle = this.resolveBool("title", "showTitle", t.queryName, true);
-                const tTitlePos  = this.resolveDropdown("title", "titlePosition", t.queryName, "top-left");
-                return [t.queryName, tShowTitle ? "T" : "t", tShowTitle ? tTitlePos : ""].join("␟");
+                // Use the effective `show` (showFlag AND text!=="") — same predicate that
+                // resolveTitleForToggle uses to decide whether to add a `pos-*` grid class.
+                // If the renderKey only tracked the raw `showTitle` flag, clearing the title
+                // text wouldn't trigger a rebuild → the stale `pos-*` class would keep
+                // reserving a title row/column → phantom side gap in fit-container mode.
+                const tt = this.resolveTitleForToggle(t.queryName);
+                return [t.queryName, tt.show ? "T" : "t", tt.show ? tt.validPos : ""].join("␟");
             }).join("␞");
 
             const renderKey = [
@@ -349,7 +368,7 @@ export class Visual implements IVisual {
     // ── Apply-to plumbing ──────────────────────────────────────────────
 
     /** Read the card's indexMap from metadata, assign slots to any new queryNames, persist if changed. */
-    private ensureSlotsForCard(cardName: "title"|"content"|"text"|"thumb"|"selection"): void {
+    private ensureSlotsForCard(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
         const propName = `${cardName}IndexMap`;
         const raw = this.currentDvMeta?.[cardName]?.[propName];
         let map: Record<string, number> = {};
@@ -389,7 +408,7 @@ export class Visual implements IVisual {
 
     /** Rebuild the card's `view` ItemDropdown items list from current bound toggles, and direct-read
      *  the active view from metadata (§11.0c — text-typed dynamic dropdown). */
-    private refreshViewItemsAndRead(cardName: "title"|"content"|"text"|"thumb"|"selection"): void {
+    private refreshViewItemsAndRead(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
         const items: Array<{ value: string; displayName: string }> = [
             { value: "all", displayName: "All toggles" }
         ];
@@ -409,7 +428,7 @@ export class Visual implements IVisual {
         }
     }
 
-    private applyCardVisibility(cardName: "title"|"content"|"text"|"thumb"|"selection"): void {
+    private applyCardVisibility(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
         const view = this.activeViewByCard[cardName] || "all";
         const isAll = view === "all" || !view.startsWith("toggle:");
         const qn = isAll ? "" : view.slice("toggle:".length);
@@ -421,11 +440,12 @@ export class Visual implements IVisual {
             content:   ["showSymbols", "symbolA", "symbolB", "symbolC", "symbolFontSize", "showLabels", "labelFontSize"],
             text:      ["labelActiveColor", "labelInactiveColor", "symbolActiveColor", "symbolInactiveColor", "symbolInactiveAlpha"],
             thumb:     ["thumbGlowColor", "thumbRingAlpha", "thumbBloomAlpha", "thumbGlowSpread", "thumbHighlightAlpha"],
-            selection: ["forceSelection"]
+            selection: ["forceSelection", "multiSelect"],
+            spacing:   ["valueGap"]
         };
         const indexMapProps: Record<string, string> = {
             title: "titleIndexMap", content: "contentIndexMap", text: "textIndexMap", thumb: "thumbIndexMap",
-            selection: "selectionIndexMap"
+            selection: "selectionIndexMap", spacing: "spacingIndexMap"
         };
 
         const card = (this.fmtSettings as unknown as Record<string, Record<string, formattingSettings.Slice>>)[cardName];
@@ -545,6 +565,7 @@ export class Visual implements IVisual {
             cachedFieldQueryName: null,
             hasRestoredSelection: false,
             selectedValue: null,
+            selectedSet: new Set<string>(),
             lastDriverVal: null,
             lastSortKey: "",
             lastUpstreamKey: "",
@@ -603,8 +624,8 @@ export class Visual implements IVisual {
      *  current selection are excluded from the distinct collection. */
     private parseToggle(
         togIdx: number,
-        constraints: (string | null)[],
-        persistedMap: Record<string, string>
+        constraints: (string[] | null)[],
+        persistedMap: Record<string, string[]>
     ): { ok: boolean; distinctCount: number } {
         const tog = this.toggles[togIdx];
         const cat = tog.cat;
@@ -630,29 +651,36 @@ export class Visual implements IVisual {
         // (slicer cascade). Diagnostic: log entry state + final distinct set so a "stops
         // working" regression can be traced row-by-row.
         const values = cat.values;
-        const upstreamConstraints = constraints.slice(0, togIdx).map((v, j) => `${j}:${v}`).join(",");
+        const upstreamConstraints = constraints.slice(0, togIdx)
+            .map((v, j) => `${j}:[${v ? v.join("|") : ""}]`).join(",");
         // Did the cascade input change since the last parseToggle? Used below to decide
         // whether the cache fallback is safe (preserve N buttons on transient shrinkage)
         // or whether we must rebuild (the cascade legitimately points at a different
         // upstream value with a different valid distinct set).
-        const upstreamKey = constraints.slice(0, togIdx).map(v => v ?? "").join("␟");
+        const upstreamKey = constraints.slice(0, togIdx)
+            .map(v => v ? v.slice().sort().join("|") : "").join("␟");
         const upstreamChanged = upstreamKey !== tog.lastUpstreamKey;
         tog.lastUpstreamKey = upstreamKey;
-        this.log(`  parseToggle(${tog.queryName}) ENTRY cat.len=${values.length} upstream=[${upstreamConstraints}] upstreamChanged=${upstreamChanged} selectedValue=${tog.selectedValue}`);
+        this.log(`  parseToggle(${tog.queryName}) ENTRY cat.len=${values.length} upstream=[${upstreamConstraints}] upstreamChanged=${upstreamChanged} selectedValue=${tog.selectedValue} selectedSet={${Array.from(tog.selectedSet).join(",")}}`);
+        // Pre-compute Set<string> per upstream constraint so the per-row mask check is O(1)
+        const upstreamSets: (Set<string> | null)[] = constraints.slice(0, togIdx).map(arr =>
+            arr && arr.length > 0 ? new Set(arr) : null
+        );
         const distinct: { raw: powerbi.PrimitiveValue; idx: number }[] = [];
         const seen = new Set<string>();
         let rowsKept = 0;
         let rowsSkipped = 0;
         for (let r = 0; r < values.length; r++) {
             // Slicer cascade: row must satisfy every upstream toggle's selection
+            // (multi-select = OR-match against any value in the upstream's set).
             let matches = true;
             for (let j = 0; j < togIdx; j++) {
-                const otherSel = constraints[j];
-                if (otherSel == null) continue; // cleared upstream → no constraint
+                const otherSet = upstreamSets[j];
+                if (otherSet == null) continue; // cleared upstream → no constraint
                 const otherCat = this.toggles[j].cat;
                 const otherVal = otherCat?.values?.[r];
                 const otherStr = otherVal == null ? "(blank)" : String(otherVal);
-                if (otherStr !== otherSel) { matches = false; break; }
+                if (!otherSet.has(otherStr)) { matches = false; break; }
             }
             if (!matches) { rowsSkipped++; continue; }
             rowsKept++;
@@ -681,7 +709,7 @@ export class Visual implements IVisual {
             if (n === 1) {
                 const remaining = distinct[0].raw == null ? "(blank)" : String(distinct[0].raw);
                 const match = tog.items.find(it => it.value === remaining);
-                if (match) tog.selectedValue = match.value;
+                if (match) this.setSelection(tog, [match.value]);
             }
             return { ok: true, distinctCount: n };
         }
@@ -735,54 +763,62 @@ export class Visual implements IVisual {
 
             if (!tog.hasRestoredSelection) {
                 tog.hasRestoredSelection = true;
-                const persistedVal = persistedMap[tog.queryName];
+                const persistedArr = persistedMap[tog.queryName];
                 const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
-                if (persistedVal === "" && !force) {
-                    // "" sentinel = user explicitly cleared. Preserve null across cascades
-                    // that change which items are available (otherwise selecting an
-                    // upstream toggle would auto-revive a downstream selection the user
-                    // had deliberately cleared). Force ON overrides — fall through.
-                    tog.selectedValue = null;
-                    this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — restored cleared (persistedVal="")`);
-                } else if (typeof persistedVal === "string" && persistedVal !== "" &&
-                    tog.items.some(it => it.value === persistedVal)) {
-                    tog.selectedValue = persistedVal;
-                    this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — restored from persisted=${persistedVal}`);
+                const validItems = (arr: string[]): string[] =>
+                    arr.filter(v => tog.items.some(it => it.value === v));
+                if (persistedArr && persistedArr.length === 1 && persistedArr[0] === "" && !force) {
+                    // "" sentinel = user explicitly cleared. Preserve cleared state across
+                    // cascades; Force ON overrides — fall through.
+                    this.clearSelection(tog);
+                    this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — restored cleared`);
+                } else if (persistedArr && validItems(persistedArr).length > 0) {
+                    const valid = validItems(persistedArr);
+                    this.setSelection(tog, valid);
+                    this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — restored from persisted=[${valid.join(",")}]`);
                 } else if (driverInItems) {
-                    tog.selectedValue = driverVal;
+                    this.setSelection(tog, [driverVal!]);
                     this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — measure-driven default=${driverVal}`);
                 } else {
-                    tog.selectedValue = tog.items[0].value;
+                    this.setSelection(tog, [tog.items[0].value]);
                     this.log(`  parseToggle(${tog.queryName}) n=${n}: first bind — force-default A=${tog.items[0].value}${force ? " (Force ON, ignoring \"\" sentinel)" : ""}`);
                 }
             } else if (driverChanged && driverInItems) {
                 this.log(`  parseToggle(${tog.queryName}) n=${n}: driver re-fired ${tog.selectedValue} → ${driverVal}`);
-                tog.selectedValue = driverVal;
-            } else if (tog.selectedValue == null &&
+                this.setSelection(tog, [driverVal!]);
+            } else if (tog.selectedSet.size === 0 &&
                 this.resolveBool("selection", "forceSelection", tog.queryName, false)) {
                 // Force-Selection retroactivity: the toggle is currently cleared AND
                 // Force Selection is now ON. Re-select to the driver value if available,
                 // else default A. Catches the case where the author flips Force ON after
                 // the user has already deselected.
                 if (driverInItems) {
-                    tog.selectedValue = driverVal;
+                    this.setSelection(tog, [driverVal!]);
                     this.log(`  parseToggle(${tog.queryName}) n=${n}: force-reactivate (driver)=${driverVal}`);
                 } else {
-                    tog.selectedValue = tog.items[0].value;
+                    this.setSelection(tog, [tog.items[0].value]);
                     this.log(`  parseToggle(${tog.queryName}) n=${n}: force-reactivate (default A)=${tog.items[0].value}`);
                 }
             } else {
-                // Cascade-reset: if the upstream selection invalidated this toggle's
-                // current non-null selectedValue, snap to the first available value.
-                // null is "user deliberately cleared" — never cascade-reset over null
-                // (unless Force is ON, handled in the branch above).
-                const stillValid = tog.selectedValue == null ||
-                                   tog.items.some(it => it.value === tog.selectedValue);
-                if (!stillValid) {
-                    tog.selectedValue = tog.items[0].value;
-                    this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-reset → ${tog.selectedValue}`);
+                // Cascade-reset: drop selectedSet entries no longer in items. If the
+                // resulting set is empty AND we previously had a selection AND the user
+                // didn't deliberately clear (set was non-empty before this update), snap
+                // to the first available value.
+                const before = tog.selectedSet.size;
+                const filtered = Array.from(tog.selectedSet).filter(v =>
+                    tog.items.some(it => it.value === v));
+                if (filtered.length !== before) {
+                    if (filtered.length === 0 && before > 0) {
+                        // All previously-selected entries are gone — snap to first to
+                        // avoid an empty filter that would un-cascade downstream.
+                        this.setSelection(tog, [tog.items[0].value]);
+                        this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-reset (all dropped) → ${tog.items[0].value}`);
+                    } else {
+                        this.setSelection(tog, filtered);
+                        this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-trim → [${filtered.join(",")}]`);
+                    }
                 } else {
-                    this.log(`  parseToggle(${tog.queryName}) n=${n}: preserve selectedValue=${tog.selectedValue}`);
+                    this.log(`  parseToggle(${tog.queryName}) n=${n}: preserve selectedSet={${Array.from(tog.selectedSet).join(",")}}`);
                 }
             }
             tog.lastDriverVal = driverVal;
@@ -807,27 +843,27 @@ export class Visual implements IVisual {
 
             if (!tog.hasRestoredSelection) {
                 tog.hasRestoredSelection = true;
-                const persistedVal = persistedMap[tog.queryName];
+                const persistedArr = persistedMap[tog.queryName];
                 const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
-                if (persistedVal === "" && !force) {
-                    tog.selectedValue = null;
+                if (persistedArr && persistedArr.length === 1 && persistedArr[0] === "" && !force) {
+                    this.clearSelection(tog);
                     this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — restored cleared`);
-                } else if (persistedVal === display) {
-                    tog.selectedValue = display;
-                    this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — restored from persisted=${persistedVal}`);
+                } else if (persistedArr && persistedArr.indexOf(display) >= 0) {
+                    this.setSelection(tog, [display]);
+                    this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — restored from persisted=${display}`);
                 } else {
                     // Default to selected: a single-value field's natural state is "filter on".
-                    tog.selectedValue = display;
+                    this.setSelection(tog, [display]);
                     this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — default selected=${display}${force ? " (Force ON, ignoring \"\" sentinel)" : ""}`);
                 }
             } else if (tog.selectedValue != null && tog.selectedValue !== display) {
                 // Cascade-reset (n=1): only one option available, snap to it.
-                tog.selectedValue = display;
+                this.setSelection(tog, [display]);
                 this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1) → ${tog.selectedValue}`);
-            } else if (tog.selectedValue == null &&
+            } else if (tog.selectedSet.size === 0 &&
                 this.resolveBool("selection", "forceSelection", tog.queryName, false)) {
                 // Force-Selection retroactivity (n=1).
-                tog.selectedValue = display;
+                this.setSelection(tog, [display]);
                 this.log(`  parseToggle(${tog.queryName}): force-reactivate (n=1) → ${tog.selectedValue}`);
             } else {
                 this.log(`  parseToggle(${tog.queryName}): preserve selectedValue=${tog.selectedValue} (n=1)`);
@@ -842,33 +878,92 @@ export class Visual implements IVisual {
         return { ok: false, distinctCount: n };
     }
 
+    // ── Selection state helpers (keep selectedValue + selectedSet in sync) ─
+
+    /** Replace the toggle's full active set with `vals`. selectedValue follows the LAST
+     *  entry of `vals` (so it tracks the most-recently-added value for thumb anchoring),
+     *  or null when the set is empty. Use this for fresh restores / driver / default-A. */
+    private setSelection(tog: ToggleState, vals: string[]): void {
+        const filtered = vals.filter(v => typeof v === "string");
+        tog.selectedSet = new Set(filtered);
+        tog.selectedValue = filtered.length > 0 ? filtered[filtered.length - 1] : null;
+    }
+
+    /** Add a single value to the active set (multi-select click). Updates selectedValue
+     *  to point at the freshly-added value so the thumb glides there if size drops to 1. */
+    private addSelection(tog: ToggleState, val: string): void {
+        tog.selectedSet.add(val);
+        tog.selectedValue = val;
+    }
+
+    /** Remove a single value from the active set. Updates selectedValue to the next
+     *  remaining entry (set iteration order = insertion order in JS) or null if empty. */
+    private removeSelection(tog: ToggleState, val: string): void {
+        tog.selectedSet.delete(val);
+        if (tog.selectedValue === val) {
+            // Pick the most-recently-inserted remaining entry as the new primary
+            let last: string | null = null;
+            for (const v of tog.selectedSet) last = v;
+            tog.selectedValue = last;
+        }
+    }
+
+    /** Clear the entire active set. */
+    private clearSelection(tog: ToggleState): void {
+        tog.selectedSet.clear();
+        tog.selectedValue = null;
+    }
+
+    /** Resolved per-toggle multi-select flag (Apply-to chain → slot → "all" default → false). */
+    private isMultiSelect(tog: ToggleState): boolean {
+        return this.resolveBool("selection", "multiSelect", tog.queryName, false);
+    }
+
     // ── Persistence (JSON map by queryName, with single-value back-compat) ─
 
-    private readPersistedMap(dv: DataView | undefined): Record<string, string> {
+    /** Map qn → string[]. Single-select toggles persist [val] (or [""] for "explicitly
+     *  cleared"); multi-select persists the full array. Back-compat: a string value in
+     *  the persisted JSON is wrapped to [val]. The legacy single-string `selectedValue`
+     *  sentinel still seeds the first toggle when no map is found. */
+    private readPersistedMap(dv: DataView | undefined): Record<string, string[]> {
         if (!dv) return {};
         const tb = (dv?.metadata?.objects as { toolbar?: { selectedValue?: string; selectedValues?: string } } | undefined)?.toolbar;
         const raw = typeof tb?.selectedValues === "string" ? tb.selectedValues : "";
         if (raw) {
             try {
                 const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === "object") return parsed as Record<string, string>;
-            } catch (e) { /* fall through to legacy */ }
+                if (parsed && typeof parsed === "object") {
+                    const out: Record<string, string[]> = {};
+                    for (const k of Object.keys(parsed)) {
+                        const v = (parsed as Record<string, unknown>)[k];
+                        if (Array.isArray(v)) {
+                            out[k] = v.filter(x => typeof x === "string") as string[];
+                        } else if (typeof v === "string") {
+                            // Back-compat: previously persisted as a flat string-per-qn map.
+                            out[k] = [v];
+                        }
+                    }
+                    return out;
+                }
+            } catch (e) { /* fall through to legacy single value */ }
         }
         // Legacy single-value: pin to the first toggle's queryName when only one is bound.
         const legacy = typeof tb?.selectedValue === "string" ? tb.selectedValue : "";
         if (legacy && this.toggles.length >= 1) {
-            return { [this.toggles[0].queryName]: legacy };
+            return { [this.toggles[0].queryName]: [legacy] };
         }
         return {};
     }
 
     private persistAll(): void {
-        const map: Record<string, string> = {};
+        const map: Record<string, string[]> = {};
         for (const t of this.toggles) {
-            // Always persist — "" sentinel marks "explicitly cleared" so single-value
-            // toggles can restore an off state across reloads. n=2 toggles never have
-            // selectedValue=null after init, so this is harmless for them.
-            map[t.queryName] = t.selectedValue ?? "";
+            // Always persist — [""] sentinel marks "explicitly cleared" so single-value
+            // toggles can restore an off state across reloads. Empty selectedSet (e.g.
+            // user just deselected everything) gets [""].
+            map[t.queryName] = t.selectedSet.size > 0
+                ? Array.from(t.selectedSet)
+                : [""];
         }
         this.host.persistProperties({
             merge: [{
@@ -884,7 +979,7 @@ export class Visual implements IVisual {
      *  bool) directly so PBI's filter engine matches correctly — sending a stringified
      *  "2024" to an integer column silently drops the filter. Returns null if we can't
      *  extract a clean { table, column } target. */
-    private buildBasicFilter(cat: powerbi.DataViewCategoryColumn, rawValue: powerbi.PrimitiveValue): unknown | null {
+    private buildBasicFilter(cat: powerbi.DataViewCategoryColumn, rawValues: powerbi.PrimitiveValue[]): unknown | null {
         const source = cat.source as { queryName?: string; expr?: { source?: { entity?: string }; ref?: string } } | undefined;
         let table = "";
         let column = "";
@@ -901,13 +996,14 @@ export class Visual implements IVisual {
                 column = qn.substring(dotIdx + 1);
             }
         }
-        this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} value=${rawValue}<${typeof rawValue}>`);
+        this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} values=[${rawValues.map(v => `${v}<${typeof v}>`).join(", ")}]`);
         if (!table || !column) return null;
+        if (rawValues.length === 0) return null;
         return {
             $schema: "http://powerbi.com/product/schema#basic",
             target: { table, column },
             operator: "In",
-            values: [rawValue],
+            values: rawValues,
             filterType: 1
         };
     }
@@ -924,17 +1020,30 @@ export class Visual implements IVisual {
         const filters: unknown[] = [];
         const tracelog: string[] = [];
         for (const t of this.toggles) {
-            if (t.selectedValue == null) continue;
+            if (t.selectedSet.size === 0) continue;
             const cat = t.cat;
             if (!cat?.source || !Array.isArray(cat.values)) continue;
-            const idx = (cat.values as powerbi.PrimitiveValue[]).findIndex(v =>
-                (v == null ? "(blank)" : String(v)) === t.selectedValue);
-            if (idx < 0) continue;
-            const rawValue = cat.values[idx];
-            const f = this.buildBasicFilter(cat, rawValue);
+
+            // For each selected display value, find the FIRST cat.values entry whose
+            // stringified form matches and grab the native typed value. De-dupe by
+            // stringified key so the filter doesn't carry redundant entries when the
+            // same value appears in multiple cross-product rows.
+            const rawValues: powerbi.PrimitiveValue[] = [];
+            const seenKeys = new Set<string>();
+            const wanted = t.selectedSet;
+            const catValues = cat.values as powerbi.PrimitiveValue[];
+            for (let i = 0; i < catValues.length; i++) {
+                const v = catValues[i];
+                const k = v == null ? "(blank)" : String(v);
+                if (!wanted.has(k) || seenKeys.has(k)) continue;
+                seenKeys.add(k);
+                rawValues.push(v);
+            }
+            if (rawValues.length === 0) continue;
+            const f = this.buildBasicFilter(cat, rawValues);
             if (f) {
                 filters.push(f);
-                tracelog.push(`${t.queryName}=${rawValue}<${typeof rawValue}>`);
+                tracelog.push(`${t.queryName}=[${rawValues.map(v => `${v}<${typeof v}>`).join(",")}]`);
             }
         }
         const action = filters.length === 0
@@ -973,27 +1082,41 @@ export class Visual implements IVisual {
         if (sideIdx < 0 || sideIdx >= tog.items.length) return;
         const clicked = tog.items[sideIdx];
         if (!clicked) return;
-        this.log(`onButtonClick(idx=${toggleIdx} qn=${tog.queryName} side=${sideIdx} clicked=${clicked.value} prevSelected=${tog.selectedValue})`);
-        if (tog.selectedValue === clicked.value) {
-            // Click the already-selected button → clear (toggle off) — UNLESS Selection
-            // Mode → Force Selection is ON for this toggle, in which case the click is
-            // ignored. Force is the author's "no-empty-state" guarantee.
-            const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
-            if (force) {
-                this.log(`  → click on active ignored (Force Selection ON)`);
-                return;
+        const isMulti = this.isMultiSelect(tog);
+        const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
+        const wasActive = tog.selectedSet.has(clicked.value);
+        this.log(`onButtonClick(idx=${toggleIdx} qn=${tog.queryName} side=${sideIdx} clicked=${clicked.value} multi=${isMulti} wasActive=${wasActive} prevSet={${Array.from(tog.selectedSet).join(",")}})`);
+
+        if (isMulti) {
+            // Multi-select: toggle membership in the set.
+            if (wasActive) {
+                // Removing the only remaining selected item AND Force is ON → ignore
+                // (preserves the no-empty-state guarantee for multi-select too).
+                if (force && tog.selectedSet.size === 1) {
+                    this.log(`  → multi: removing last under Force ignored`);
+                    return;
+                }
+                this.removeSelection(tog, clicked.value);
+                this.log(`  → multi: removed; now {${Array.from(tog.selectedSet).join(",")}}`);
+            } else {
+                this.addSelection(tog, clicked.value);
+                this.log(`  → multi: added; now {${Array.from(tog.selectedSet).join(",")}}`);
             }
-            tog.selectedValue = null;
-            this.commitSelections();
-            this.persistAll();
-            this.refreshActiveClasses(tog);
-            this.applyButtonColors(tog);
-            this.positionThumb(tog);
-            this.log(`  → toggled off`);
-            return;
+        } else {
+            // Single-select: existing replace-or-clear behavior.
+            if (wasActive) {
+                if (force) {
+                    this.log(`  → click on active ignored (Force Selection ON)`);
+                    return;
+                }
+                this.clearSelection(tog);
+                this.log(`  → toggled off`);
+            } else {
+                this.setSelection(tog, [clicked.value]);
+                this.log(`  → set to ${clicked.value}`);
+            }
         }
 
-        tog.selectedValue = clicked.value;
         this.commitSelections();
         this.persistAll();
         this.refreshActiveClasses(tog);
@@ -1002,10 +1125,16 @@ export class Visual implements IVisual {
     }
 
     private refreshActiveClasses(tog: ToggleState): void {
+        const isMulti = this.isMultiSelect(tog);
+        // In multi-select with size > 1, the thumb is hidden (positionThumb removes
+        // tb-ready); the .multi-active class on each selected button drives the visual
+        // fill so the active set is still visible.
+        const showMultiFill = isMulti && tog.selectedSet.size > 1;
         for (let i = 0; i < tog.btnEls.length; i++) {
             const item = tog.items[i];
-            const isActive = !!(item && tog.selectedValue === item.value);
+            const isActive = !!(item && tog.selectedSet.has(item.value));
             tog.btnEls[i].classList.toggle("is-active", isActive);
+            tog.btnEls[i].classList.toggle("multi-active", isActive && showMultiFill);
             tog.btnEls[i].setAttribute("aria-pressed", String(isActive));
         }
     }
@@ -1022,7 +1151,7 @@ export class Visual implements IVisual {
             const lblEl = tog.lblEls[i];
             const symEl = tog.symEls[i];
             if (!item || !btnEl || !lblEl || !symEl) continue;
-            const isActive = item.value === tog.selectedValue;
+            const isActive = tog.selectedSet.has(item.value);
             const labelColor = isActive
                 ? this.colorForRow(tog, item.rowIdx, "text", "labelActiveColor",   "#F1F5F9")
                 : this.colorForRow(tog, item.rowIdx, "text", "labelInactiveColor", "#94A3B8");
@@ -1035,7 +1164,9 @@ export class Visual implements IVisual {
             btnEl.style.setProperty("--btn-glow-color", hexToRgbTriplet(btnGlowHex));
         }
 
-        // Thumb glow color follows the ACTIVE button's row (only that button's glow shows)
+        // Thumb glow color follows the PRIMARY active button's row (selectedValue tracks
+        // the most-recent click in multi-select). Falls back to the toggle-level constant
+        // when no selection is active.
         const blk = tog.blockEl;
         if (blk) {
             const activeIdx = tog.items.findIndex(it => it.value === tog.selectedValue);
@@ -1291,7 +1422,14 @@ export class Visual implements IVisual {
     private positionThumb(tog: ToggleState): void {
         if (!tog.toggleEl || tog.btnEls.length === 0) return;
         // Cleared state: hide thumb (no active button to slide over).
-        if (tog.selectedValue == null) {
+        if (tog.selectedValue == null || tog.selectedSet.size === 0) {
+            tog.toggleEl.classList.remove("tb-ready");
+            return;
+        }
+        // Multi-select with size > 1: hide the sliding thumb — there's no single anchor
+        // to slide between. Each selected button gets a `multi-active` class instead
+        // (driven by refreshActiveClasses) which paints its own fill.
+        if (tog.selectedSet.size > 1) {
             tog.toggleEl.classList.remove("tb-ready");
             return;
         }
@@ -1350,7 +1488,6 @@ export class Visual implements IVisual {
         this.root.classList.toggle("tb-fit", isFit);
 
         s.sizing.size.visible        = !isFit;
-        s.sizing.textScaling.visible =  isFit;
 
         // ── Orientation alignment (only when leftover space exists, i.e. Fixed mode) ──
         // Resolve effective layout direction (mirrors renderAll())
@@ -1411,8 +1548,10 @@ export class Visual implements IVisual {
             const scaleW = (wrapW || REFERENCE_W) / REFERENCE_W;
             const containerScale = Math.max(0.5, Math.min(8, Math.min(scaleH, scaleW)));
             scaleVal = containerScale;
-            const textFactor = Math.max(0, Math.min(100, Number(s.sizing.textScaling.value) || 0)) / 100;
-            textScale = 1 + (containerScale - 1) * textFactor;
+            // Text in fit mode stays at the EXACT font size set under Content. The toggle's
+            // chrome (padding, gaps, thumb spread) still fills the container via --tb-scale,
+            // but label/symbol font sizes are fixed — author-controlled, not container-driven.
+            textScale = 1;
         } else {
             const fixedSize = Math.max(8, Math.min(400, Number(s.sizing.size.value) || REFERENCE_H));
             scaleVal = fixedSize / REFERENCE_H;
@@ -1526,7 +1665,17 @@ export class Visual implements IVisual {
             blk.style.setProperty("--symbol-opacity-inactive", String(symα));
 
             this.applyButtonColors(t);
+
+            // ── Per-toggle "spacing between values" — gap between buttons inside this toggle
+            const valueGap = Math.max(0, Math.min(60, this.resolveNum("spacing", "valueGap", t.queryName, 0)));
+            blk.style.setProperty("--tb-value-gap", valueGap + "px");
         }
+
+        // ── Global "spacing between fields" — gap on .tb-toggles-wrap
+        // (flex container's `gap` resolves to row-gap in vertical, column-gap in horizontal,
+        // so a single value covers both orientations automatically).
+        const fieldGap = Math.max(0, Math.min(200, Number(s.spacing.fieldGap.value) || 0));
+        root.style.setProperty("--tb-field-gap", fieldGap + "px");
 
         // ── Animation
         const dur = Math.max(0, Math.min(5000, Number(s.animation.transitionDuration.value) || 350));

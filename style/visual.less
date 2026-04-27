@@ -35,6 +35,11 @@
     --tb-label-fs:     12px;
     --tb-symbol-fs:    12px;
 
+    /* Spacing card — set by JS at runtime. Default 0 for value gap (buttons touch),
+       8px between fields (matches the previous hardcoded value). */
+    --tb-value-gap:    0px;
+    --tb-field-gap:    8px;
+
     width: 100%;
     height: 100%;
     display: flex;
@@ -42,7 +47,10 @@
     justify-content: stretch;
     font-family: "Segoe UI", sans-serif;
     box-sizing: border-box;
-    padding: 2px;
+    /* No outer padding — the toggle should go edge-to-edge in fit mode. The thumb's
+       glow extends slightly outside the pill so we keep `overflow: hidden` to keep
+       PBI's reported render bounds tight. */
+    padding: 0;
     overflow: hidden;
 
     * { box-sizing: border-box; }
@@ -51,7 +59,7 @@
     .tb-toggles-wrap {
         flex: 1;
         display: flex;
-        gap: 8px;
+        gap: var(--tb-field-gap, 8px);
         min-width: 0;
         min-height: 0;
     }
@@ -167,6 +175,7 @@
     .tb-toggle {
         position: relative;
         display: inline-flex;
+        gap: var(--tb-value-gap, 0px);
         background: linear-gradient(180deg, var(--toggle-bg-top), var(--toggle-bg-bot));
         border: 1px solid var(--toggle-border);
         border-radius: var(--toggle-radius);
@@ -273,6 +282,20 @@
     }
     .tb-btn.is-active .tb-lbl {
         color: var(--label-active-color);
+    }
+
+    /* Multi-select fill: when selectedSet.size > 1, each selected button paints its
+       own thumb-style background using its row's --btn-glow-color. The single sliding
+       thumb is hidden in that mode (positionThumb removes tb-ready). Mirrors the
+       gradient + ring used by .tb-toggle::before so the visual language stays
+       consistent whether one or many are selected. */
+    .tb-btn.multi-active {
+        background: linear-gradient(180deg,
+            rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.22),
+            rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.08));
+        box-shadow:
+            inset 0 0 0 1px rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.35),
+            0 4px var(--thumb-glow-spread, 14px) -6px rgba(var(--btn-glow-color, var(--thumb-glow-color)), 0.45);
     }
 
     .tb-sym.is-hidden, .tb-lbl.is-hidden { display: none; }

@@ -77,8 +77,7 @@
       "displayName": "Sizing",
       "properties": {
         "sizeMode":    { "displayName": "Size Mode",         "type": { "text": true } },
-        "size":        { "displayName": "Fixed Size (px)",   "type": { "numeric": true } },
-        "textScaling": { "displayName": "Text Scaling (%)",   "type": { "numeric": true } }
+        "size":        { "displayName": "Fixed Size (px)",   "type": { "numeric": true } }
       }
     },
     "capsule": {
@@ -247,6 +246,22 @@
         "horizontalAlign": { "displayName": "Horizontal Alignment", "type": { "text": true } }
       }
     },
+    "spacing": {
+      "displayName": "Spacing",
+      "properties": {
+        "view":              { "displayName": "Apply to",                 "type": { "text": true } },
+        "spacingIndexMap":   { "displayName": "Slot Map (internal)",      "type": { "text": true } },
+
+        "valueGap":   { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+        "valueGap_0": { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+        "valueGap_1": { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+        "valueGap_2": { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+        "valueGap_3": { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+        "valueGap_4": { "displayName": "Spacing Between Values (px)", "type": { "numeric": true } },
+
+        "fieldGap":   { "displayName": "Spacing Between Fields (px)", "type": { "numeric": true } }
+      }
+    },
     "selection": {
       "displayName": "Selection Mode",
       "properties": {
@@ -257,7 +272,14 @@
         "forceSelection_1":  { "displayName": "Force Selection",     "type": { "bool": true } },
         "forceSelection_2":  { "displayName": "Force Selection",     "type": { "bool": true } },
         "forceSelection_3":  { "displayName": "Force Selection",     "type": { "bool": true } },
-        "forceSelection_4":  { "displayName": "Force Selection",     "type": { "bool": true } }
+        "forceSelection_4":  { "displayName": "Force Selection",     "type": { "bool": true } },
+
+        "multiSelect":       { "displayName": "Multi Select",        "type": { "bool": true } },
+        "multiSelect_0":     { "displayName": "Multi Select",        "type": { "bool": true } },
+        "multiSelect_1":     { "displayName": "Multi Select",        "type": { "bool": true } },
+        "multiSelect_2":     { "displayName": "Multi Select",        "type": { "bool": true } },
+        "multiSelect_3":     { "displayName": "Multi Select",        "type": { "bool": true } },
+        "multiSelect_4":     { "displayName": "Multi Select",        "type": { "bool": true } }
       }
     },
     "toolbar": {

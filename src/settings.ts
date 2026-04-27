@@ -138,15 +138,10 @@ class SizingCard extends FormattingSettingsCard {
         description: "Master size of the toggle in pixels — drives both height and (proportionally) width. Reference 30 px = default; 60 px = roughly double everything; 15 px = half. Only used when Size Mode = Fixed.",
         value: 31
     });
-    textScaling = new formattingSettings.NumUpDown({
-        name: "textScaling", displayName: "Text Scaling (%)",
-        description: "Only used when Size Mode = Fit Container. Controls how much label/symbol text scales when the container grows. 0 = text stays at the size you set under Content; 100 = text scales linearly with the container; values in between blend.",
-        value: 0
-    });
 
     name: string = "sizing";
     displayName: string = "Sizing";
-    slices: formattingSettings.Slice[] = [this.sizeMode, this.size, this.textScaling];
+    slices: formattingSettings.Slice[] = [this.sizeMode, this.size];
 }
 
 // ── Capsule (track shape + surface) ─────────────────────────────────
@@ -523,6 +518,50 @@ class OrientationCard extends FormattingSettingsCard {
     slices: formattingSettings.Slice[] = [this.mode, this.verticalAlign, this.horizontalAlign];
 }
 
+// ── Spacing ────────────────────────────────────────────────────────
+// Per-toggle "spacing between values" (gap between buttons inside a toggle, with
+// Apply-to dropdown so each field can override) + global "spacing between fields"
+// (gap between toggles — applies horizontally in horizontal orientation, vertically
+// in vertical orientation).
+class SpacingCard extends FormattingSettingsCard {
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles: edits below apply as defaults to every toggle. Pick a specific toggle to override its spacing independently.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    spacingIndexMap = new formattingSettings.TextInput({
+        name: "spacingIndexMap", displayName: "Slot Map (internal)",
+        description: "Internal — tracks which slot each field uses so overrides survive field reordering.",
+        value: "", placeholder: ""
+    });
+
+    valueGap = new formattingSettings.NumUpDown({
+        name: "valueGap", displayName: "Spacing Between Values (px)",
+        description: "Gap between the buttons inside a toggle (e.g. between Jan / Feb / Mar). 0 = buttons touch.",
+        value: 0
+    });
+    valueGap_0 = new formattingSettings.NumUpDown({ name: "valueGap_0", displayName: "Spacing Between Values (px)", value: 0 });
+    valueGap_1 = new formattingSettings.NumUpDown({ name: "valueGap_1", displayName: "Spacing Between Values (px)", value: 0 });
+    valueGap_2 = new formattingSettings.NumUpDown({ name: "valueGap_2", displayName: "Spacing Between Values (px)", value: 0 });
+    valueGap_3 = new formattingSettings.NumUpDown({ name: "valueGap_3", displayName: "Spacing Between Values (px)", value: 0 });
+    valueGap_4 = new formattingSettings.NumUpDown({ name: "valueGap_4", displayName: "Spacing Between Values (px)", value: 0 });
+
+    fieldGap = new formattingSettings.NumUpDown({
+        name: "fieldGap", displayName: "Spacing Between Fields (px)",
+        description: "Gap between toggles when more than one field is bound. Applied horizontally when toggles arrange in a row, vertically when they stack. Always visible regardless of Apply to.",
+        value: 8
+    });
+
+    name: string = "spacing";
+    displayName: string = "Spacing";
+    slices: formattingSettings.Slice[] = [
+        this.view, this.spacingIndexMap,
+        this.valueGap, this.valueGap_0, this.valueGap_1, this.valueGap_2, this.valueGap_3, this.valueGap_4,
+        this.fieldGap
+    ];
+}
+
 // ── Selection Mode ─────────────────────────────────────────────────
 // Apply-to dropdown with one boolean (Force Selection) + 5 slot variants.
 // Force ON → clicking the active button does nothing (cannot be cleared).
@@ -551,13 +590,28 @@ class SelectionModeCard extends FormattingSettingsCard {
     forceSelection_3 = new formattingSettings.ToggleSwitch({ name: "forceSelection_3", displayName: "Force Selection", value: false });
     forceSelection_4 = new formattingSettings.ToggleSwitch({ name: "forceSelection_4", displayName: "Force Selection", value: false });
 
+    multiSelect = new formattingSettings.ToggleSwitch({
+        name: "multiSelect", displayName: "Multi Select",
+        description: "When ON, multiple values can be selected at once — clicking a button toggles its membership in the active set instead of replacing the previous selection. The thumb hides when more than one value is active; selected buttons are styled directly. The downstream filter sends ALL active values (OR-match), and downstream cascade toggles are evaluated against the union.",
+        value: false
+    });
+
+    multiSelect_0 = new formattingSettings.ToggleSwitch({ name: "multiSelect_0", displayName: "Multi Select", value: false });
+    multiSelect_1 = new formattingSettings.ToggleSwitch({ name: "multiSelect_1", displayName: "Multi Select", value: false });
+    multiSelect_2 = new formattingSettings.ToggleSwitch({ name: "multiSelect_2", displayName: "Multi Select", value: false });
+    multiSelect_3 = new formattingSettings.ToggleSwitch({ name: "multiSelect_3", displayName: "Multi Select", value: false });
+    multiSelect_4 = new formattingSettings.ToggleSwitch({ name: "multiSelect_4", displayName: "Multi Select", value: false });
+
     name: string = "selection";
     displayName: string = "Selection Mode";
     slices: formattingSettings.Slice[] = [
         this.view, this.selectionIndexMap,
         this.forceSelection,
         this.forceSelection_0, this.forceSelection_1, this.forceSelection_2,
-        this.forceSelection_3, this.forceSelection_4
+        this.forceSelection_3, this.forceSelection_4,
+        this.multiSelect,
+        this.multiSelect_0, this.multiSelect_1, this.multiSelect_2,
+        this.multiSelect_3, this.multiSelect_4
     ];
 }
 
@@ -571,10 +625,11 @@ export class ToggleFormattingModel extends FormattingSettingsModel {
     thumb       = new ThumbCard();
     animation   = new AnimationCard();
     orientation = new OrientationCard();
+    spacing     = new SpacingCard();
     selection   = new SelectionModeCard();
     cards: formattingSettings.Cards[] = [
         this.title, this.sizing, this.capsule, this.content, this.text, this.thumb,
-        this.animation, this.orientation, this.selection
+        this.animation, this.orientation, this.spacing, this.selection
     ];
 }
 
