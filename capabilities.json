@@ -4,7 +4,7 @@
       "displayName": "Field",
       "name": "field",
       "kind": "Grouping",
-      "description": "Up to 5 columns. Each column with exactly 2 distinct values produces its own toggle. Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
+      "description": "Up to 5 columns. Each column with 1, 2, or 3 distinct values produces its own toggle (single button, two-side, or three-segment). Fields must be from the same table or related tables (Power BI requires a relationship to evaluate multiple bound columns in a single visual)."
     },
     {
       "displayName": "Default Selection (optional)",
@@ -100,6 +100,7 @@
         "showSymbols":    { "displayName": "Show Symbols",            "type": { "bool": true } },
         "symbolA":        { "displayName": "Symbol A",                "type": { "text": true } },
         "symbolB":        { "displayName": "Symbol B",                "type": { "text": true } },
+        "symbolC":        { "displayName": "Symbol C",                "type": { "text": true } },
         "symbolFontSize": { "displayName": "Symbol Font Size (px)",   "type": { "numeric": true } },
         "showLabels":     { "displayName": "Show Labels",             "type": { "bool": true } },
         "labelFontSize":  { "displayName": "Label Font Size (px)",    "type": { "numeric": true } },
@@ -107,6 +108,7 @@
         "showSymbols_0":    { "displayName": "Show Symbols",          "type": { "bool": true } },
         "symbolA_0":        { "displayName": "Symbol A",              "type": { "text": true } },
         "symbolB_0":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolC_0":        { "displayName": "Symbol C",              "type": { "text": true } },
         "symbolFontSize_0": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
         "showLabels_0":     { "displayName": "Show Labels",           "type": { "bool": true } },
         "labelFontSize_0":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
@@ -114,6 +116,7 @@
         "showSymbols_1":    { "displayName": "Show Symbols",          "type": { "bool": true } },
         "symbolA_1":        { "displayName": "Symbol A",              "type": { "text": true } },
         "symbolB_1":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolC_1":        { "displayName": "Symbol C",              "type": { "text": true } },
         "symbolFontSize_1": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
         "showLabels_1":     { "displayName": "Show Labels",           "type": { "bool": true } },
         "labelFontSize_1":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
@@ -121,6 +124,7 @@
         "showSymbols_2":    { "displayName": "Show Symbols",          "type": { "bool": true } },
         "symbolA_2":        { "displayName": "Symbol A",              "type": { "text": true } },
         "symbolB_2":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolC_2":        { "displayName": "Symbol C",              "type": { "text": true } },
         "symbolFontSize_2": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
         "showLabels_2":     { "displayName": "Show Labels",           "type": { "bool": true } },
         "labelFontSize_2":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
@@ -128,6 +132,7 @@
         "showSymbols_3":    { "displayName": "Show Symbols",          "type": { "bool": true } },
         "symbolA_3":        { "displayName": "Symbol A",              "type": { "text": true } },
         "symbolB_3":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolC_3":        { "displayName": "Symbol C",              "type": { "text": true } },
         "symbolFontSize_3": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
         "showLabels_3":     { "displayName": "Show Labels",           "type": { "bool": true } },
         "labelFontSize_3":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } },
@@ -135,6 +140,7 @@
         "showSymbols_4":    { "displayName": "Show Symbols",          "type": { "bool": true } },
         "symbolA_4":        { "displayName": "Symbol A",              "type": { "text": true } },
         "symbolB_4":        { "displayName": "Symbol B",              "type": { "text": true } },
+        "symbolC_4":        { "displayName": "Symbol C",              "type": { "text": true } },
         "symbolFontSize_4": { "displayName": "Symbol Font Size (px)", "type": { "numeric": true } },
         "showLabels_4":     { "displayName": "Show Labels",           "type": { "bool": true } },
         "labelFontSize_4":  { "displayName": "Label Font Size (px)",  "type": { "numeric": true } }
@@ -239,6 +245,19 @@
         "mode":            { "displayName": "Layout Direction",   "type": { "text": true } },
         "verticalAlign":   { "displayName": "Vertical Alignment", "type": { "text": true } },
         "horizontalAlign": { "displayName": "Horizontal Alignment", "type": { "text": true } }
+      }
+    },
+    "selection": {
+      "displayName": "Selection Mode",
+      "properties": {
+        "view":              { "displayName": "Apply to",            "type": { "text": true } },
+        "selectionIndexMap": { "displayName": "Slot Map (internal)", "type": { "text": true } },
+        "forceSelection":    { "displayName": "Force Selection",     "type": { "bool": true } },
+        "forceSelection_0":  { "displayName": "Force Selection",     "type": { "bool": true } },
+        "forceSelection_1":  { "displayName": "Force Selection",     "type": { "bool": true } },
+        "forceSelection_2":  { "displayName": "Force Selection",     "type": { "bool": true } },
+        "forceSelection_3":  { "displayName": "Force Selection",     "type": { "bool": true } },
+        "forceSelection_4":  { "displayName": "Force Selection",     "type": { "bool": true } }
       }
     },
     "toolbar": {

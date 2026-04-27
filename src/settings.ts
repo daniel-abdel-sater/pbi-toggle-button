@@ -199,6 +199,11 @@ class ContentCard extends FormattingSettingsCard {
         description: "Symbol shown on the B side.",
         value: "D", placeholder: "e.g. D"
     });
+    symbolC = new formattingSettings.TextInput({
+        name: "symbolC", displayName: "Symbol C",
+        description: "Symbol shown on the C side. Only renders when the bound field has 3 distinct values (three-segment toggle).",
+        value: "M", placeholder: "e.g. M"
+    });
     symbolFontSize = new formattingSettings.NumUpDown({
         name: "symbolFontSize", displayName: "Symbol Font Size (px)",
         description: "Symbol text size in pixels. Still multiplied by Sizing scale.",
@@ -218,6 +223,7 @@ class ContentCard extends FormattingSettingsCard {
     showSymbols_0    = new formattingSettings.ToggleSwitch({ name: "showSymbols_0",    displayName: "Show Symbols", value: true });
     symbolA_0        = new formattingSettings.TextInput   ({ name: "symbolA_0",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolB_0        = new formattingSettings.TextInput   ({ name: "symbolB_0",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolC_0        = new formattingSettings.TextInput   ({ name: "symbolC_0",        displayName: "Symbol C", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolFontSize_0 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_0", displayName: "Symbol Font Size (px)", value: 12 });
     showLabels_0     = new formattingSettings.ToggleSwitch({ name: "showLabels_0",     displayName: "Show Labels", value: true });
     labelFontSize_0  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_0",  displayName: "Label Font Size (px)", value: 12 });
@@ -225,6 +231,7 @@ class ContentCard extends FormattingSettingsCard {
     showSymbols_1    = new formattingSettings.ToggleSwitch({ name: "showSymbols_1",    displayName: "Show Symbols", value: true });
     symbolA_1        = new formattingSettings.TextInput   ({ name: "symbolA_1",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolB_1        = new formattingSettings.TextInput   ({ name: "symbolB_1",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolC_1        = new formattingSettings.TextInput   ({ name: "symbolC_1",        displayName: "Symbol C", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolFontSize_1 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_1", displayName: "Symbol Font Size (px)", value: 12 });
     showLabels_1     = new formattingSettings.ToggleSwitch({ name: "showLabels_1",     displayName: "Show Labels", value: true });
     labelFontSize_1  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_1",  displayName: "Label Font Size (px)", value: 12 });
@@ -232,6 +239,7 @@ class ContentCard extends FormattingSettingsCard {
     showSymbols_2    = new formattingSettings.ToggleSwitch({ name: "showSymbols_2",    displayName: "Show Symbols", value: true });
     symbolA_2        = new formattingSettings.TextInput   ({ name: "symbolA_2",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolB_2        = new formattingSettings.TextInput   ({ name: "symbolB_2",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolC_2        = new formattingSettings.TextInput   ({ name: "symbolC_2",        displayName: "Symbol C", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolFontSize_2 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_2", displayName: "Symbol Font Size (px)", value: 12 });
     showLabels_2     = new formattingSettings.ToggleSwitch({ name: "showLabels_2",     displayName: "Show Labels", value: true });
     labelFontSize_2  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_2",  displayName: "Label Font Size (px)", value: 12 });
@@ -239,6 +247,7 @@ class ContentCard extends FormattingSettingsCard {
     showSymbols_3    = new formattingSettings.ToggleSwitch({ name: "showSymbols_3",    displayName: "Show Symbols", value: true });
     symbolA_3        = new formattingSettings.TextInput   ({ name: "symbolA_3",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolB_3        = new formattingSettings.TextInput   ({ name: "symbolB_3",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolC_3        = new formattingSettings.TextInput   ({ name: "symbolC_3",        displayName: "Symbol C", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolFontSize_3 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_3", displayName: "Symbol Font Size (px)", value: 12 });
     showLabels_3     = new formattingSettings.ToggleSwitch({ name: "showLabels_3",     displayName: "Show Labels", value: true });
     labelFontSize_3  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_3",  displayName: "Label Font Size (px)", value: 12 });
@@ -246,6 +255,7 @@ class ContentCard extends FormattingSettingsCard {
     showSymbols_4    = new formattingSettings.ToggleSwitch({ name: "showSymbols_4",    displayName: "Show Symbols", value: true });
     symbolA_4        = new formattingSettings.TextInput   ({ name: "symbolA_4",        displayName: "Symbol A", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolB_4        = new formattingSettings.TextInput   ({ name: "symbolB_4",        displayName: "Symbol B", value: "", placeholder: "Override (leave empty to inherit)" });
+    symbolC_4        = new formattingSettings.TextInput   ({ name: "symbolC_4",        displayName: "Symbol C", value: "", placeholder: "Override (leave empty to inherit)" });
     symbolFontSize_4 = new formattingSettings.NumUpDown   ({ name: "symbolFontSize_4", displayName: "Symbol Font Size (px)", value: 12 });
     showLabels_4     = new formattingSettings.ToggleSwitch({ name: "showLabels_4",     displayName: "Show Labels", value: true });
     labelFontSize_4  = new formattingSettings.NumUpDown   ({ name: "labelFontSize_4",  displayName: "Label Font Size (px)", value: 12 });
@@ -254,12 +264,12 @@ class ContentCard extends FormattingSettingsCard {
     displayName: string = "Content";
     slices: formattingSettings.Slice[] = [
         this.view, this.contentIndexMap,
-        this.showSymbols, this.symbolA, this.symbolB, this.symbolFontSize, this.showLabels, this.labelFontSize,
-        this.showSymbols_0, this.symbolA_0, this.symbolB_0, this.symbolFontSize_0, this.showLabels_0, this.labelFontSize_0,
-        this.showSymbols_1, this.symbolA_1, this.symbolB_1, this.symbolFontSize_1, this.showLabels_1, this.labelFontSize_1,
-        this.showSymbols_2, this.symbolA_2, this.symbolB_2, this.symbolFontSize_2, this.showLabels_2, this.labelFontSize_2,
-        this.showSymbols_3, this.symbolA_3, this.symbolB_3, this.symbolFontSize_3, this.showLabels_3, this.labelFontSize_3,
-        this.showSymbols_4, this.symbolA_4, this.symbolB_4, this.symbolFontSize_4, this.showLabels_4, this.labelFontSize_4
+        this.showSymbols, this.symbolA, this.symbolB, this.symbolC, this.symbolFontSize, this.showLabels, this.labelFontSize,
+        this.showSymbols_0, this.symbolA_0, this.symbolB_0, this.symbolC_0, this.symbolFontSize_0, this.showLabels_0, this.labelFontSize_0,
+        this.showSymbols_1, this.symbolA_1, this.symbolB_1, this.symbolC_1, this.symbolFontSize_1, this.showLabels_1, this.labelFontSize_1,
+        this.showSymbols_2, this.symbolA_2, this.symbolB_2, this.symbolC_2, this.symbolFontSize_2, this.showLabels_2, this.labelFontSize_2,
+        this.showSymbols_3, this.symbolA_3, this.symbolB_3, this.symbolC_3, this.symbolFontSize_3, this.showLabels_3, this.labelFontSize_3,
+        this.showSymbols_4, this.symbolA_4, this.symbolB_4, this.symbolC_4, this.symbolFontSize_4, this.showLabels_4, this.labelFontSize_4
     ];
 }
 
@@ -486,6 +496,44 @@ class OrientationCard extends FormattingSettingsCard {
     slices: formattingSettings.Slice[] = [this.mode, this.verticalAlign, this.horizontalAlign];
 }
 
+// ── Selection Mode ─────────────────────────────────────────────────
+// Apply-to dropdown with one boolean (Force Selection) + 5 slot variants.
+// Force ON → clicking the active button does nothing (cannot be cleared).
+class SelectionModeCard extends FormattingSettingsCard {
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles: Force Selection applies to every bound field. Pick a specific toggle to override per-field.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    selectionIndexMap = new formattingSettings.TextInput({
+        name: "selectionIndexMap", displayName: "Slot Map (internal)",
+        description: "Internal — tracks which slot each field uses so overrides survive field reordering. Hidden in the format pane.",
+        value: "", placeholder: ""
+    });
+
+    forceSelection = new formattingSettings.ToggleSwitch({
+        name: "forceSelection", displayName: "Force Selection",
+        description: "When ON, the toggle cannot be cleared. Clicking the active button does nothing instead of deselecting.",
+        value: false
+    });
+
+    forceSelection_0 = new formattingSettings.ToggleSwitch({ name: "forceSelection_0", displayName: "Force Selection", value: false });
+    forceSelection_1 = new formattingSettings.ToggleSwitch({ name: "forceSelection_1", displayName: "Force Selection", value: false });
+    forceSelection_2 = new formattingSettings.ToggleSwitch({ name: "forceSelection_2", displayName: "Force Selection", value: false });
+    forceSelection_3 = new formattingSettings.ToggleSwitch({ name: "forceSelection_3", displayName: "Force Selection", value: false });
+    forceSelection_4 = new formattingSettings.ToggleSwitch({ name: "forceSelection_4", displayName: "Force Selection", value: false });
+
+    name: string = "selection";
+    displayName: string = "Selection Mode";
+    slices: formattingSettings.Slice[] = [
+        this.view, this.selectionIndexMap,
+        this.forceSelection,
+        this.forceSelection_0, this.forceSelection_1, this.forceSelection_2,
+        this.forceSelection_3, this.forceSelection_4
+    ];
+}
+
 // ── Model ───────────────────────────────────────────────────────────
 export class ToggleFormattingModel extends FormattingSettingsModel {
     title       = new TitleCard();
@@ -496,8 +544,10 @@ export class ToggleFormattingModel extends FormattingSettingsModel {
     thumb       = new ThumbCard();
     animation   = new AnimationCard();
     orientation = new OrientationCard();
+    selection   = new SelectionModeCard();
     cards: formattingSettings.Cards[] = [
-        this.title, this.sizing, this.capsule, this.content, this.text, this.thumb, this.animation, this.orientation
+        this.title, this.sizing, this.capsule, this.content, this.text, this.thumb,
+        this.animation, this.orientation, this.selection
     ];
 }
 
