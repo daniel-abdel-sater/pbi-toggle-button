@@ -48,6 +48,13 @@ interface ToggleState {
      *  the new sort. Cross-product reshuffles don't change this signature, so they
      *  don't flip sides spuriously. */
     lastSortKey: string;
+    /** Signature of all upstream toggles' selectedValues at the time of the previous
+     *  parseToggle call. When this changes (the cascade input changed) we force a
+     *  cache rebuild — preserving the cache when going from a longer month to a
+     *  shorter one would leave stale buttons (e.g. Dec=31 → Feb=28 keeps 31 buttons).
+     *  When upstream is unchanged but n < cache, cache-fallback still fires (real
+     *  transient shrinkage from PBI's row pruning, not an intentional cascade switch). */
+    lastUpstreamKey: string;
 
     // DOM refs (per toggle)
     blockEl:  HTMLDivElement | null;
@@ -143,13 +150,12 @@ export class Visual implements IVisual {
                 const vals = dv.categorical.values || [];
                 this.log(`  DV categorical: cats=${cats.length} valueCols=${vals.length}`);
                 cats.forEach((c, i) => {
-                    const sample = (c.values || []).slice(0, 6).map(v => v == null ? "(blank)" : String(v));
-                    this.log(`    cat[${i}] qn=${c.source?.queryName} len=${c.values?.length} sample=[${sample.join(", ")}]`);
+                    const arr = c.values || [];
+                    const sample = arr.slice(0, 6).map(v => v == null ? "(blank)" : `${v}<${typeof v}>`);
+                    this.log(`    cat[${i}] qn=${c.source?.queryName} len=${arr.length} sample=[${sample.join(", ")}]`);
                     if (c.objects && c.objects.length > 0) {
                         const objSample = c.objects.slice(0, 4).map((o, oi) => `r${oi}=${o ? JSON.stringify(o) : "null"}`);
                         this.log(`    cat[${i}] objects: ${objSample.join(" | ")}`);
-                    } else {
-                        this.log(`    cat[${i}] objects: NONE (PBI didn't emit per-row property values)`);
                     }
                 });
                 vals.forEach((v, i) => {
@@ -278,19 +284,17 @@ export class Visual implements IVisual {
             const symB = String(this.fmtSettings.content.symbolB.value ?? "");
             const symC = String(this.fmtSettings.content.symbolC.value ?? "");
 
-            // Per-toggle structural fields — resolved title via Apply-to overrides.
-            // Use cachedItems for the items signature: cachedItems only grows (once we've
-            // seen N values it stays at N), so transient cat shrinkage from cross-product
-            // pruning (BLANK-returning measures) doesn't flicker the renderKey and force a
-            // DOM rebuild. The only legitimate trigger for a structure rebuild is the first
-            // time we observe a new field's distinct values, or when the value SET changes.
+            // Per-toggle STRUCTURAL fields only. Items count + label text are PATCHED
+            // in applyLayout via syncButtonCount + label updates, so they don't enter
+            // the renderKey — that's what keeps cascade-driven items count changes
+            // (e.g. Day 28 → 30) from triggering a full DOM rebuild + flicker. Same
+            // for titleText. Things that genuinely affect the DOM structure (toggle
+            // count, queryNames, title visibility, title position, symbol presence)
+            // remain so a real structural change still triggers renderAll.
             const togglesKey = this.toggles.map(t => {
                 const tShowTitle = this.resolveBool("title", "showTitle", t.queryName, true);
-                const tTitleText = this.resolveText("title", "titleText", t.queryName, "");
                 const tTitlePos  = this.resolveDropdown("title", "titlePosition", t.queryName, "top-left");
-                const cache = t.cachedItems.length > 0 ? t.cachedItems : t.items;
-                const items = cache.length > 0 ? cache.map(i => i.display).join("|") : "none";
-                return [t.queryName, items, tShowTitle ? "T" : "t", tShowTitle ? tTitleText : "", tShowTitle ? tTitlePos : ""].join("␟");
+                return [t.queryName, tShowTitle ? "T" : "t", tShowTitle ? tTitlePos : ""].join("␟");
             }).join("␞");
 
             const renderKey = [
@@ -302,8 +306,11 @@ export class Visual implements IVisual {
             ].join("␟");
 
             if (renderKey !== this.lastRenderKey || !this.togglesWrapEl) {
+                this.log(`renderKey CHANGED → renderAll() (was ${this.lastRenderKey ? `len=${this.lastRenderKey.length}` : "empty"}, now len=${renderKey.length})`);
                 this.renderAll();
                 this.lastRenderKey = renderKey;
+            } else {
+                this.log(`renderKey unchanged → skip renderAll, applyLayout only`);
             }
             this.applyLayout();
         } catch (e) {
@@ -540,6 +547,7 @@ export class Visual implements IVisual {
             selectedValue: null,
             lastDriverVal: null,
             lastSortKey: "",
+            lastUpstreamKey: "",
             blockEl: null, titleEl: null, wrapEl: null, toggleEl: null,
             btnEls: [], symEls: [], lblEls: [],
             resizeObs: null
@@ -618,10 +626,23 @@ export class Visual implements IVisual {
         const sortChanged = sortKey !== tog.lastSortKey;
         tog.lastSortKey = sortKey;
 
-        // Collect up to 3 distinct values, masked by upstream toggle selections
+        // Collect distinct values from cat.values, masked by upstream toggle selections
+        // (slicer cascade). Diagnostic: log entry state + final distinct set so a "stops
+        // working" regression can be traced row-by-row.
         const values = cat.values;
+        const upstreamConstraints = constraints.slice(0, togIdx).map((v, j) => `${j}:${v}`).join(",");
+        // Did the cascade input change since the last parseToggle? Used below to decide
+        // whether the cache fallback is safe (preserve N buttons on transient shrinkage)
+        // or whether we must rebuild (the cascade legitimately points at a different
+        // upstream value with a different valid distinct set).
+        const upstreamKey = constraints.slice(0, togIdx).map(v => v ?? "").join("␟");
+        const upstreamChanged = upstreamKey !== tog.lastUpstreamKey;
+        tog.lastUpstreamKey = upstreamKey;
+        this.log(`  parseToggle(${tog.queryName}) ENTRY cat.len=${values.length} upstream=[${upstreamConstraints}] upstreamChanged=${upstreamChanged} selectedValue=${tog.selectedValue}`);
         const distinct: { raw: powerbi.PrimitiveValue; idx: number }[] = [];
         const seen = new Set<string>();
+        let rowsKept = 0;
+        let rowsSkipped = 0;
         for (let r = 0; r < values.length; r++) {
             // Slicer cascade: row must satisfy every upstream toggle's selection
             let matches = true;
@@ -633,25 +654,29 @@ export class Visual implements IVisual {
                 const otherStr = otherVal == null ? "(blank)" : String(otherVal);
                 if (otherStr !== otherSel) { matches = false; break; }
             }
-            if (!matches) continue;
+            if (!matches) { rowsSkipped++; continue; }
+            rowsKept++;
 
             const k = values[r] == null ? "(blank)" : String(values[r]);
             if (seen.has(k)) continue;
             seen.add(k);
             distinct.push({ raw: values[r], idx: r });
             // No upper cap — let the visual render whatever PBI's dataReductionAlgorithm
-            // delivers (top 10 by default). The toggle pill stretches via flexbox so any
-            // count fits; symbols A/B/C are the only labelled positions, sides D+ render
-            // label-only.
+            // delivers. The toggle pill stretches via flexbox so any count fits;
+            // symbols A/B/C are the only labelled positions, sides D+ render label-only.
         }
         const n = distinct.length;
+        const distinctTrace = distinct.map(d => `${d.raw == null ? "(blank)" : String(d.raw)}<${typeof d.raw}>@${d.idx}`).join(", ");
+        this.log(`  parseToggle(${tog.queryName}) MASK rowsKept=${rowsKept} rowsSkipped=${rowsSkipped} distinct.n=${n} [${distinctTrace}]`);
 
         // Cache fallback: cat shrunk transiently (cross-filter, BLANK measure pruning).
-        // If cache holds more buttons than the current data shows, preserve the cached
-        // UI structure so A/B/C stay visible — only update selectedValue when we can
-        // identify the remaining value. This keeps the renderKey stable (no DOM rebuild)
-        // and lets the thumb glide rather than the visual rebuilding.
-        if (n >= 1 && n < tog.cachedItems.length && tog.cachedItems.length >= 2) {
+        // If cache holds more buttons than the current data shows AND the upstream
+        // cascade input is UNCHANGED, preserve cached UI structure (the shrinkage is
+        // a PBI artifact, not an intentional change). When upstream changed, this
+        // toggle's available items legitimately depend on the new upstream value —
+        // we MUST rebuild (e.g. Dec=31 → Feb=28 needs 28 buttons, not 31).
+        if (!upstreamChanged && n >= 1 && n < tog.cachedItems.length && tog.cachedItems.length >= 2) {
+            this.log(`  parseToggle(${tog.queryName}) CACHE-FALLBACK n=${n} < cache=${tog.cachedItems.length} (upstream unchanged) → keep cached items, selectedValue=${tog.selectedValue}`);
             tog.items = tog.cachedItems;
             if (n === 1) {
                 const remaining = distinct[0].raw == null ? "(blank)" : String(distinct[0].raw);
@@ -697,7 +722,9 @@ export class Visual implements IVisual {
         };
 
         if (n >= 2) {
+            const cachedLenBefore = tog.cachedItems.length;
             rebuildItemsForN(n);
+            this.log(`  parseToggle(${tog.queryName}) n>=2 BRANCH expectedN=${n} cachedItems.length: ${cachedLenBefore} → ${tog.cachedItems.length} hasRestoredSelection=${tog.hasRestoredSelection}`);
 
             // Driver evaluation — drives first-bind default and post-bind re-eval when
             // the measure's chosen default changes (context shift). lastDriverVal tells
@@ -852,9 +879,12 @@ export class Visual implements IVisual {
         });
     }
 
-    /** Build an IBasicFilter (column-scoped In filter) from a category column + value.
-     *  Returns null if we can't extract a clean { table, column } target. */
-    private buildBasicFilter(cat: powerbi.DataViewCategoryColumn, value: string): unknown | null {
+    /** Build an IBasicFilter (column-scoped In filter) from a category column + raw
+     *  cat.values[] entry. Passes the **native typed value** (number / Date / string /
+     *  bool) directly so PBI's filter engine matches correctly — sending a stringified
+     *  "2024" to an integer column silently drops the filter. Returns null if we can't
+     *  extract a clean { table, column } target. */
+    private buildBasicFilter(cat: powerbi.DataViewCategoryColumn, rawValue: powerbi.PrimitiveValue): unknown | null {
         const source = cat.source as { queryName?: string; expr?: { source?: { entity?: string }; ref?: string } } | undefined;
         let table = "";
         let column = "";
@@ -871,13 +901,13 @@ export class Visual implements IVisual {
                 column = qn.substring(dotIdx + 1);
             }
         }
-        this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} value=${value}`);
+        this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} value=${rawValue}<${typeof rawValue}>`);
         if (!table || !column) return null;
         return {
             $schema: "http://powerbi.com/product/schema#basic",
             target: { table, column },
             operator: "In",
-            values: [value],
+            values: [rawValue],
             filterType: 1
         };
     }
@@ -885,28 +915,43 @@ export class Visual implements IVisual {
     /** Apply the union of every toggle's currently-active selection as per-column basic
      *  filters via host.applyJsonFilter. This is column-scoped (not row-scoped like
      *  withCategory selectionIds), so deselecting one toggle truly removes its filter
-     *  contribution — siblings on the page see only the remaining toggles' filters. */
+     *  contribution — siblings on the page see only the remaining toggles' filters.
+     *
+     *  selectedValue is stored as a stringified display value, but `cat.values[]` keeps
+     *  the native typed entries (number / Date / string / bool). We round-trip through
+     *  cat.values[idx] so the filter receives the column's native type. */
     private commitSelections(): void {
         const filters: unknown[] = [];
         const tracelog: string[] = [];
         for (const t of this.toggles) {
             if (t.selectedValue == null) continue;
-            if (!t.cat?.source) continue;
-            const f = this.buildBasicFilter(t.cat, t.selectedValue);
+            const cat = t.cat;
+            if (!cat?.source || !Array.isArray(cat.values)) continue;
+            const idx = (cat.values as powerbi.PrimitiveValue[]).findIndex(v =>
+                (v == null ? "(blank)" : String(v)) === t.selectedValue);
+            if (idx < 0) continue;
+            const rawValue = cat.values[idx];
+            const f = this.buildBasicFilter(cat, rawValue);
             if (f) {
                 filters.push(f);
-                tracelog.push(`${t.queryName}=${t.selectedValue}`);
+                tracelog.push(`${t.queryName}=${rawValue}<${typeof rawValue}>`);
             }
         }
         const action = filters.length === 0
             ? 1 /* FilterAction.remove — clears all filters from this visual */
             : 0 /* FilterAction.merge — replaces filter set with these */;
         this.log(`commitSelections() applyJsonFilter filters=${filters.length} action=${action} [${tracelog.join(", ")}]`);
+        // Dump the full filter payload so the actual JSON sent to PBI is visible
+        for (let i = 0; i < filters.length; i++) {
+            this.log(`  filter[${i}]=${JSON.stringify(filters[i])}`);
+        }
         try {
             (this.host.applyJsonFilter as unknown as (
                 f: unknown, objectName: string, propertyName: string, action: number
             ) => void)(filters, "general", "filter", action);
+            this.log(`  applyJsonFilter OK`);
         } catch (e) {
+            this.log(`  applyJsonFilter THREW: ${(e as Error)?.message || e}`);
             console.error("[ToggleButton] applyJsonFilter error:", e);
         }
     }
@@ -1153,46 +1198,12 @@ export class Visual implements IVisual {
         toggle.setAttribute("role", "group");
         tog.toggleEl = toggle;
 
-        // Build one button per item. Symbol slots only exist for the first three sides
-        // (A/B/C in the format pane); sides 3+ render label-only.
-        const buildBtn = (sideIdx: number): { btn: HTMLButtonElement; sym: HTMLSpanElement; lbl: HTMLSpanElement } => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            // Letter class for the first three sides, numeric class beyond that.
-            const sideTag = sideIdx <= 2 ? ["a", "b", "c"][sideIdx] : String(sideIdx);
-            btn.className = `tb-btn tb-btn-${sideTag}`;
-
-            const item = tog.items[sideIdx];
-            const sideSym = sideIdx === 0 ? opts.symA : sideIdx === 1 ? opts.symB : sideIdx === 2 ? opts.symC : "";
-
-            const sym = document.createElement("span");
-            sym.className = "tb-sym";
-            sym.textContent = sideSym;
-            if (!opts.showSymbols || !sym.textContent || !item) sym.classList.add("is-hidden");
-
-            const lbl = document.createElement("span");
-            lbl.className = "tb-lbl";
-            lbl.textContent = item ? item.display : "";
-            if (!opts.showLabels || !item) lbl.classList.add("is-hidden");
-
-            btn.appendChild(sym);
-            btn.appendChild(lbl);
-            if (item) {
-                btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(idx, sideIdx); });
-            } else {
-                btn.style.display = "none";
-                btn.setAttribute("aria-hidden", "true");
-                btn.tabIndex = -1;
-            }
-            return { btn, sym, lbl };
-        };
-
         tog.btnEls = [];
         tog.symEls = [];
         tog.lblEls = [];
         const sideCount = Math.max(tog.items.length, 1);
         for (let i = 0; i < sideCount; i++) {
-            const { btn, sym, lbl } = buildBtn(i);
+            const { btn, sym, lbl } = this.buildButton(tog, idx, i);
             toggle.appendChild(btn);
             tog.btnEls.push(btn);
             tog.symEls.push(sym);
@@ -1209,6 +1220,67 @@ export class Visual implements IVisual {
                 requestAnimationFrame(() => this.positionThumb(tog));
             });
             tog.resizeObs.observe(toggle);
+        }
+    }
+
+    /** Build one toggle button (button + symbol span + label span). Used by both
+     *  renderToggleBlock (full DOM build) and syncButtonCount (in-place add). The click
+     *  handler is wired unconditionally and dispatches on the CURRENT items[sideIdx] at
+     *  click time, so when items change in place the handler stays correct. */
+    private buildButton(tog: ToggleState, toggleIdx: number, sideIdx: number): { btn: HTMLButtonElement; sym: HTMLSpanElement; lbl: HTMLSpanElement } {
+        const c = this.resolveContentForToggle(tog.queryName);
+        const item = tog.items[sideIdx];
+        const sideTag = sideIdx <= 2 ? ["a", "b", "c"][sideIdx] : String(sideIdx);
+        const sideSym = sideIdx === 0 ? c.symbolA : sideIdx === 1 ? c.symbolB : sideIdx === 2 ? c.symbolC : "";
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `tb-btn tb-btn-${sideTag}`;
+
+        const sym = document.createElement("span");
+        sym.className = "tb-sym";
+        sym.textContent = sideSym;
+        if (!c.showSymbols || !sideSym || !item) sym.classList.add("is-hidden");
+
+        const lbl = document.createElement("span");
+        lbl.className = "tb-lbl";
+        lbl.textContent = item ? item.display : "";
+        if (!c.showLabels || !item) lbl.classList.add("is-hidden");
+
+        btn.appendChild(sym);
+        btn.appendChild(lbl);
+        btn.addEventListener("click", (e) => { e.stopPropagation(); this.onButtonClick(toggleIdx, sideIdx); });
+        if (!item) {
+            btn.style.display = "none";
+            btn.setAttribute("aria-hidden", "true");
+            btn.tabIndex = -1;
+        }
+        return { btn, sym, lbl };
+    }
+
+    /** Patch the toggle's button DOM in-place to match its current items.length, adding
+     *  buttons at the end or removing the last ones. Called from applyLayout on every
+     *  update so cascade-driven items count changes (e.g. Day 28 → 30 when Month flips
+     *  Feb → April) don't trigger renderAll's full DOM nuke + rebuild — the visual
+     *  patches in place and the user doesn't see a flicker. */
+    private syncButtonCount(tog: ToggleState): void {
+        if (!tog.toggleEl) return;
+        const target = Math.max(tog.items.length, 1);
+        const toggleIdx = this.toggles.indexOf(tog);
+        if (toggleIdx < 0) return;
+        while (tog.btnEls.length < target) {
+            const sideIdx = tog.btnEls.length;
+            const { btn, sym, lbl } = this.buildButton(tog, toggleIdx, sideIdx);
+            tog.toggleEl.appendChild(btn);
+            tog.btnEls.push(btn);
+            tog.symEls.push(sym);
+            tog.lblEls.push(lbl);
+        }
+        while (tog.btnEls.length > target) {
+            const last = tog.btnEls.pop();
+            if (last) last.remove();
+            tog.symEls.pop();
+            tog.lblEls.pop();
         }
     }
 
@@ -1286,24 +1358,39 @@ export class Visual implements IVisual {
         else if (orientModeForAlign === "horizontal") effectiveOrient = "horizontal";
         else effectiveOrient = (titlePosForAlign === "left" || titlePosForAlign === "right") ? "vertical" : "horizontal";
 
-        const showVAlign = !isFit && effectiveOrient === "vertical";
-        const showHAlign = !isFit && effectiveOrient === "horizontal";
-        s.orientation.verticalAlign.visible   = showVAlign;
-        s.orientation.horizontalAlign.visible = showHAlign;
+        // Both alignment dropdowns are visible whenever sizing is Fixed — regardless of
+        // layout direction. Each axis has independent meaning: vertical alignment positions
+        // toggles on Y, horizontal alignment on X. Together they cover every layout case.
+        s.orientation.verticalAlign.visible   = !isFit;
+        s.orientation.horizontalAlign.visible = !isFit;
 
-        // Apply to the toggles wrap as inline justify-content (overrides the LESS default)
+        // Apply BOTH alignments simultaneously. Main axis (along which toggles arrange)
+        // gets justify-content, cross axis gets align-items. "Stretch" (default) on the
+        // cross axis keeps the equal-size behavior; non-stretch values use natural sizing.
         if (this.togglesWrapEl) {
             if (isFit) {
-                // Fit mode: alignment is moot (toggles fill the space). Use sane defaults.
                 this.togglesWrapEl.style.justifyContent = effectiveOrient === "vertical" ? "center" : "stretch";
-            } else if (effectiveOrient === "vertical") {
-                const v = (s.orientation.verticalAlign.value as { value?: string })?.value || "center";
-                const map: Record<string, string> = { top: "flex-start", center: "center", bottom: "flex-end" };
-                this.togglesWrapEl.style.justifyContent = map[v] || "center";
+                this.togglesWrapEl.style.alignItems = "stretch";
             } else {
-                const h = (s.orientation.horizontalAlign.value as { value?: string })?.value || "center";
-                const map: Record<string, string> = { left: "flex-start", center: "center", right: "flex-end" };
-                this.togglesWrapEl.style.justifyContent = map[h] || "center";
+                const v = (s.orientation.verticalAlign.value   as { value?: string })?.value || "stretch";
+                const h = (s.orientation.horizontalAlign.value as { value?: string })?.value || "stretch";
+                const mapY: Record<string, string> = { stretch: "stretch", top:  "flex-start", center: "center", bottom: "flex-end" };
+                const mapX: Record<string, string> = { stretch: "stretch", left: "flex-start", center: "center", right:  "flex-end" };
+                // justify-content has no "stretch" value; treat it as flex-start (toggles
+                // stack from the start, equal-size still comes from the cross-axis side).
+                const mainFromVal = (val: string, m: Record<string, string>): string => {
+                    const out = m[val];
+                    return (!out || out === "stretch") ? "flex-start" : out;
+                };
+                if (effectiveOrient === "vertical") {
+                    // Main = Y, cross = X
+                    this.togglesWrapEl.style.justifyContent = mainFromVal(v, mapY);
+                    this.togglesWrapEl.style.alignItems     = mapX[h] || "stretch";
+                } else {
+                    // Main = X, cross = Y
+                    this.togglesWrapEl.style.justifyContent = mainFromVal(h, mapX);
+                    this.togglesWrapEl.style.alignItems     = mapY[v] || "stretch";
+                }
             }
         }
 
@@ -1331,25 +1418,49 @@ export class Visual implements IVisual {
         root.style.setProperty("--tb-scale", String(scaleVal));
         root.style.setProperty("--tb-text-scale", String(textScale));
 
-        // ── Per-toggle Content patching: text content, visibility classes, font sizes (CSS vars on each block)
+        // ── Per-toggle Content patching: button count, label text, symbol text +
+        // visibility, font sizes. All in-place — no DOM nuke. This is the path that
+        // keeps cascade-driven items count changes (e.g. Day 28 → 30 across months)
+        // from triggering a full renderAll rebuild and visible flicker.
         for (const t of this.toggles) {
-            if (!t.toggleEl || t.btnEls.length === 0) continue;
-            const c = this.resolveContentForToggle(t.queryName);
+            if (!t.toggleEl) continue;
 
-            // Symbols + labels — patch in place per side (no DOM rebuild). Symbol slots
-            // exist only for sides 0/1/2 (A/B/C); sides 3+ render label-only.
+            // 1. Sync button count to items.length (add/remove buttons in place)
+            this.syncButtonCount(t);
+
+            const c = this.resolveContentForToggle(t.queryName);
+            // 2. Per-button label text + visibility, symbol text + visibility, button
+            //    presence (display:none when item missing). Symbol slots exist only for
+            //    sides 0/1/2 (A/B/C); sides 3+ render label-only.
             for (let i = 0; i < t.btnEls.length; i++) {
                 const item = t.items[i];
-                const sym = t.symEls[i];
-                const lbl = t.lblEls[i];
-                if (!sym || !lbl) continue;
+                const btn  = t.btnEls[i];
+                const sym  = t.symEls[i];
+                const lbl  = t.lblEls[i];
+                if (!btn || !sym || !lbl) continue;
+                if (item) {
+                    btn.style.display = "";
+                    btn.removeAttribute("aria-hidden");
+                    btn.tabIndex = 0;
+                    lbl.textContent = item.display;
+                } else {
+                    btn.style.display = "none";
+                    btn.setAttribute("aria-hidden", "true");
+                    btn.tabIndex = -1;
+                }
                 const sideSym = i === 0 ? c.symbolA : i === 1 ? c.symbolB : i === 2 ? c.symbolC : "";
                 sym.textContent = sideSym;
                 sym.classList.toggle("is-hidden", !c.showSymbols || !sideSym || !item);
                 lbl.classList.toggle("is-hidden", !c.showLabels || !item);
             }
 
-            // Per-block font-size CSS vars (overrides root-level vars for this block only)
+            // 3. Title text (titlePosition is structural, in renderKey; titleText patches here)
+            if (t.titleEl) {
+                const tt = this.resolveTitleForToggle(t.queryName);
+                if (tt.show) t.titleEl.textContent = tt.text;
+            }
+
+            // 4. Per-block font-size CSS vars (overrides root-level vars for this block only)
             const labelFs  = Math.max(6, Math.min(72, c.labelFontSize  || 12));
             const symbolFs = Math.max(6, Math.min(72, c.symbolFontSize || 12));
             (t.blockEl as HTMLDivElement).style.setProperty("--tb-label-fs",  labelFs  + "px");

@@ -277,5 +277,6 @@
   },
   "privileges": [],
   "supportsKeyboardFocus": true,
-  "supportsLandingPage": true
+  "supportsLandingPage": true,
+  "supportsSynchronizingFilterState": true
 }

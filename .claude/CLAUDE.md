@@ -96,3 +96,20 @@ pbiviz.json          — API 5.11.0
 **Generalized to parent CLAUDE.md §11.0d** — full four-piece protocol for per-row FX on categorical visuals (instanceKind + capability rule + wildcard selector + slot-aware reader).
 
 ---
+
+### Integer/date filters silently no-op + cache-fallback breaks cascade-driven shrinkage
+[retry-lesson] [date: 2026-04-28]
+
+**Context:** User reported that Year/Month Name/Day cascade worked for a moment, then "broke". Specifically, switching to integer-bound fields (Year, Day) didn't cross-filter the table, AND switching from a longer month (Dec=31 days) to a shorter one (Feb=28 days) left 31 day-buttons displayed.
+
+**Two independent bugs that compounded for this scenario:**
+
+1. **Filter type coercion (numeric/date columns)**: `commitSelections` was sending `t.selectedValue` (string) as the IBasicFilter `values[]`. Text columns matched fine, integer/date columns silently no-op'd because PBI's filter engine matches strictly by type. Fix: round-trip via `cat.values[idx]` to grab the native typed entry. Generalized as parent §11.0e.
+
+2. **Cache fallback firing on cascade-driven shrinkage**: parseToggle's cache fallback (`if (n < cachedItems.length) keep cache`) was added to handle PBI's transient row pruning. But it can't tell transient shrinkage from intentional cascade-driven shrinkage. When user clicks Dec→Feb, n=28 < cache=31 → fallback fires → 31-button UI persists. Fix: track upstream-constraint signature per toggle (`lastUpstreamKey`); only allow fallback when upstream is unchanged. Generalized as parent §P32.
+
+**Why the symptom looked number-specific:** the user's text fields (Status: completed/in plan/late) had no downstream cascade variability, so they hit neither bug. Their date scenario had numeric fields AND cascade-driven downstream variability, so both bugs surfaced. Pure text + cascade would have hit bug 2; pure numeric + no cascade would have hit bug 1; their combo hit both.
+
+**Diagnostic added permanently:** `cat.objects` per-row dump in `update()`, `MASK rowsKept/skipped/distinct` per parseToggle, `upstreamChanged` flag, `renderKey CHANGED|unchanged`, `applyJsonFilter OK|THREW`, `value=<v><type>` in `buildBasicFilter`. These let us localize within a few log lines whether a regression is in (a) data shape, (b) cascade mask, (c) cache decision, (d) renderKey diff, (e) filter type, or (f) host filter rejection.
+
+---

@@ -497,22 +497,24 @@ class OrientationCard extends FormattingSettingsCard {
     });
     verticalAlign = new formattingSettings.ItemDropdown({
         name: "verticalAlign", displayName: "Vertical Alignment",
-        description: "Where the vertical toggle stack sits along the vertical axis when there's leftover space. Only used when Sizing > Size Mode = Fixed and the resolved layout direction is Vertical.",
-        value: { value: "center", displayName: "Center" },
+        description: "Position toggles on the vertical axis. Stretch (default) makes each toggle fill the available height. Top/Center/Bottom uses each toggle's natural height — useful in horizontal layouts when you don't want all toggles to share the tallest height.",
+        value: { value: "stretch", displayName: "Stretch" },
         items: [
-            { value: "top",    displayName: "Top" },
-            { value: "center", displayName: "Center" },
-            { value: "bottom", displayName: "Bottom" }
+            { value: "stretch", displayName: "Stretch" },
+            { value: "top",     displayName: "Top" },
+            { value: "center",  displayName: "Center" },
+            { value: "bottom",  displayName: "Bottom" }
         ]
     });
     horizontalAlign = new formattingSettings.ItemDropdown({
         name: "horizontalAlign", displayName: "Horizontal Alignment",
-        description: "Where the horizontal toggle row sits along the horizontal axis when there's leftover space. Only used when Sizing > Size Mode = Fixed and the resolved layout direction is Horizontal.",
-        value: { value: "center", displayName: "Center" },
+        description: "Position toggles on the horizontal axis. Stretch (default) makes each toggle fill the available width. Left/Center/Right uses each toggle's natural width — useful in vertical layouts when you don't want all toggles to share the widest width.",
+        value: { value: "stretch", displayName: "Stretch" },
         items: [
-            { value: "left",   displayName: "Left" },
-            { value: "center", displayName: "Center" },
-            { value: "right",  displayName: "Right" }
+            { value: "stretch", displayName: "Stretch" },
+            { value: "left",    displayName: "Left" },
+            { value: "center",  displayName: "Center" },
+            { value: "right",   displayName: "Right" }
         ]
     });
 

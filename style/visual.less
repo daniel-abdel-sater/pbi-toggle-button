@@ -222,8 +222,23 @@
         cursor: pointer;
         color: var(--label-color);
         font: inherit;
-        border-radius: inherit;
-        transition: color var(--transition-duration) var(--transition-ease);
+        /* Match the thumb's radius (toggle radius minus track padding) so the hover
+           preview fits inside the pill cleanly instead of inheriting the full pill
+           radius and clipping awkwardly at the edges. */
+        border-radius: calc(var(--toggle-radius) - var(--toggle-padding));
+        transition:
+            background var(--transition-duration) var(--transition-ease),
+            color      var(--transition-duration) var(--transition-ease);
+
+        /* Hover preview on inactive buttons: dimmed version of the thumb's gradient,
+           same accent color (--thumb-glow-color). Visually communicates "click here
+           to slide the thumb to this side" without animating the thumb itself. */
+        &:hover:not(.is-active) {
+            background: linear-gradient(180deg,
+                rgba(var(--thumb-glow-color), 0.16),
+                rgba(var(--thumb-glow-color), 0.05));
+            box-shadow: inset 0 0 0 1px rgba(var(--thumb-glow-color), 0.18);
+        }
 
         &:focus-visible {
             outline: 2px solid rgba(var(--thumb-glow-color), 0.6);
