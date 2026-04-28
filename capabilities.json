@@ -31,7 +31,7 @@
   ],
   "objects": {
     "title": {
-      "displayName": "Title",
+      "displayName": "Fields Label",
       "properties": {
         "view":           { "displayName": "Apply to",                "type": { "text": true } },
         "titleIndexMap":  { "displayName": "Slot Map (internal)",     "type": { "text": true } },
@@ -235,7 +235,13 @@
       "displayName": "Animation",
       "properties": {
         "transitionDuration": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
-        "transitionEase":     { "displayName": "Transition Easing",        "type": { "text": true } }
+        "transitionEase":     { "displayName": "Transition Easing",        "type": { "text": true } },
+
+        "shimmerEnabled":     { "displayName": "Track Shimmer",             "type": { "bool": true } },
+        "shimmerMode":        { "displayName": "Shimmer Mode",              "type": { "text": true } },
+        "shimmerColor":       { "displayName": "Shimmer Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor", "selector": ["field"] } } },
+        "shimmerDuration":    { "displayName": "Shimmer Duration (ms)",     "type": { "numeric": true } },
+        "shimmerOpacity":     { "displayName": "Shimmer Transparency (%)",  "type": { "numeric": true } }
       }
     },
     "orientation": {

@@ -108,7 +108,7 @@ class TitleCard extends FormattingSettingsCard {
     titleFontSize_4 = new formattingSettings.NumUpDown   ({ name: "titleFontSize_4", displayName: "Title Font Size", value: 16 });
 
     name: string = "title";
-    displayName: string = "Title";
+    displayName: string = "Fields Label";
     slices: formattingSettings.Slice[] = [
         this.view, this.titleIndexMap,
         // "all" defaults
@@ -473,9 +473,44 @@ class AnimationCard extends FormattingSettingsCard {
         ]
     });
 
+    shimmerEnabled = new formattingSettings.ToggleSwitch({
+        name: "shimmerEnabled", displayName: "Track Shimmer",
+        description: "When ON, a horizontally-sweeping highlight band travels across the entire toggle (all values), composited with mix-blend-mode: screen so it lights up whatever is underneath. Global — applies to every bound field.",
+        value: false
+    });
+    shimmerMode = new formattingSettings.ItemDropdown({
+        name: "shimmerMode", displayName: "Shimmer Mode",
+        description: "Per Value: every button shimmers in its OWN FX-resolved color simultaneously, all bands in lockstep. Wave: ONE band sweeps the full toggle and picks up each value's color as it crosses that button — the band itself changes color mid-sweep.",
+        value: { value: "perValue", displayName: "Per Value" },
+        items: [
+            { value: "perValue", displayName: "Per Value" },
+            { value: "wave",     displayName: "Wave" }
+        ]
+    });
+    shimmerColor = new formattingSettings.ColorPicker({
+        name: "shimmerColor", displayName: "Shimmer Color",
+        description: "Tint of the sweeping highlight band. Defaults to white. Click the FX icon to drive this PER VALUE from a DAX measure — each button (each distinct value of the bound field) shimmers in its own resolved color while keeping the global animation timing.",
+        value: { value: "#FFFFFF" },
+        instanceKind: FX,
+        selector: FX_SELECTOR
+    });
+    shimmerDuration = new formattingSettings.NumUpDown({
+        name: "shimmerDuration", displayName: "Shimmer Duration (ms)",
+        description: "How long one full sweep takes, in milliseconds. 2500 = default. Lower = faster sweep. The band ping-pongs — sweeps left → right, then right → left, then repeats — so this is the time for ONE pass.",
+        value: 2500
+    });
+    shimmerOpacity = new formattingSettings.NumUpDown({
+        name: "shimmerOpacity", displayName: "Shimmer Transparency (%)",
+        description: "Overall opacity of the shimmer band (0–100). 0 = invisible; 100 = full intensity (default).",
+        value: 100
+    });
+
     name: string = "animation";
     displayName: string = "Animation";
-    slices: formattingSettings.Slice[] = [this.transitionDuration, this.transitionEase];
+    slices: formattingSettings.Slice[] = [
+        this.transitionDuration, this.transitionEase,
+        this.shimmerEnabled, this.shimmerMode, this.shimmerColor, this.shimmerDuration, this.shimmerOpacity
+    ];
 }
 
 // ── Orientation ─────────────────────────────────────────────────────

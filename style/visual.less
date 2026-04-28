@@ -56,12 +56,69 @@
     * { box-sizing: border-box; }
 
     /* ── Multi-toggle layout container ──────────────────────────── */
+    /* Hosts N .tb-block children (one per bound field). When the visual's
+       container can't fit them all, the wrap itself scrolls along the
+       orientation axis — horizontal in row layout, vertical in column.
+       Scrollbar hidden + edge fade via mask-image + drag-to-scroll.
+       Same UX pattern as the per-toggle .tb-toggle-track. */
     .tb-toggles-wrap {
+        position: relative;
         flex: 1;
         display: flex;
         gap: var(--tb-field-gap, 8px);
         min-width: 0;
         min-height: 0;
+        cursor: grab;
+        scroll-behavior: smooth;
+
+        /* Hide scrollbar */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        &::-webkit-scrollbar { display: none; }
+    }
+    .tb-toggles-wrap.is-axis-x {
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    .tb-toggles-wrap.is-axis-y {
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    .tb-toggles-wrap.is-dragging {
+        cursor: grabbing;
+        scroll-behavior: auto;
+    }
+    .tb-toggles-wrap.is-dragging * {
+        user-select: none;
+        pointer-events: none;
+    }
+
+    /* Edge fade — horizontal axis */
+    .tb-toggles-wrap.is-axis-x.has-overflow-l.has-overflow-r {
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+    .tb-toggles-wrap.is-axis-x.has-overflow-l:not(.has-overflow-r) {
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+                mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+    }
+    .tb-toggles-wrap.is-axis-x:not(.has-overflow-l).has-overflow-r {
+        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+
+    /* Edge fade — vertical axis */
+    .tb-toggles-wrap.is-axis-y.has-overflow-t.has-overflow-b {
+        -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+    .tb-toggles-wrap.is-axis-y.has-overflow-t:not(.has-overflow-b) {
+        -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+                mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+    }
+    .tb-toggles-wrap.is-axis-y:not(.has-overflow-t).has-overflow-b {
+        -webkit-mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
     }
     &.tb-orient-vertical .tb-toggles-wrap {
         flex-direction: column;
@@ -70,6 +127,9 @@
     }
     /* Vertical stack: every toggle shares the same width as the widest block */
     &.tb-orient-vertical .tb-toggle {
+        width: 100%;
+    }
+    &.tb-orient-vertical .tb-toggle-track {
         width: 100%;
     }
     &.tb-orient-vertical .tb-lbl,
@@ -161,6 +221,9 @@
         width: 100%;
         height: 100%;
     }
+    &.tb-fit .tb-toggle-track {
+        width: 100%;        /* fill the toggle so flex:1 buttons share full width */
+    }
     &.tb-fit .tb-btn {
         flex: 1;
         justify-content: center;
@@ -171,20 +234,21 @@
         text-overflow: ellipsis;
     }
 
-    /* ── Glass capsule track ─────────────────────────────────────── */
+    /* ── Glass capsule (outer chrome) ───────────────────────────────
+       The pill border, background gradient, isolation context for blend modes.
+       Sized to fit the inner scroll track. NO scroll, NO padding, NO gap —
+       those live on .tb-toggle-track inside. */
     .tb-toggle {
         position: relative;
-        display: inline-flex;
-        gap: var(--tb-value-gap, 0px);
+        display: inline-flex;       /* shrink-to-fit track unless overridden by .tb-fit */
+        max-width: 100%;            /* never exceed the wrap; track scrolls if content does */
         background: linear-gradient(180deg, var(--toggle-bg-top), var(--toggle-bg-bot));
         border: 1px solid var(--toggle-border);
         border-radius: var(--toggle-radius);
-        padding: var(--toggle-padding);
         box-shadow:
             inset 0 1px 0 rgba(255,255,255,0.04),
             0 1px 0 rgba(0,0,0,0.4);
         isolation: isolate;
-        cursor: pointer;
         user-select: none;
 
         &:focus-visible {
@@ -193,8 +257,68 @@
         }
     }
 
-    /* ── Sliding thumb (::before pseudo) ─────────────────────────── */
-    .tb-toggle::before {
+    /* ── Inner scroll track ────────────────────────────────────────
+       Hosts the sliding thumb (::before) and the buttons. When buttons fit, the
+       track shrink-wraps and the toggle stays at natural width. When buttons
+       overflow (many values + small container in Fixed mode), the track scrolls
+       horizontally — scrollbar hidden, edges fade via mask-image, drag-to-scroll
+       via pointer events on the JS side. Wheel + trackpad swipe + touch swipe
+       work for free thanks to overflow-x: auto. */
+    .tb-toggle-track {
+        position: relative;
+        display: flex;
+        flex: 1 1 auto;
+        align-self: stretch;        /* fill toggle's cross-axis (height in row, width in column) */
+        min-width: 0;
+        max-width: 100%;
+        gap: var(--tb-value-gap, 0px);
+        padding: var(--toggle-padding);
+        overflow-x: auto;
+        overflow-y: hidden;
+        cursor: grab;
+        scroll-behavior: smooth;
+        border-radius: var(--toggle-radius); /* clip thumb glow at the pill corners */
+
+        /* Hide scrollbar — Firefox + Chromium + old Edge */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        &::-webkit-scrollbar { display: none; }
+    }
+    .tb-toggle-track.is-dragging {
+        cursor: grabbing;
+        scroll-behavior: auto; /* live-track the cursor; smooth would lag */
+    }
+    .tb-toggle-track.is-dragging * {
+        user-select: none;
+        pointer-events: none;
+    }
+
+    /* ── Edge fade (mask-image, conditional) ───────────────────────
+       has-overflow-l = there's content scrolled off to the left  → fade left edge
+       has-overflow-r = there's more content to the right         → fade right edge
+       Mask applies to the track's viewport (not content), so the fade stays glued
+       to the visible edges as content scrolls. JS toggles the classes from the
+       scroll handler with a 4px buffer so the fades don't flicker at the ends. */
+    .tb-toggle-track.has-overflow-l.has-overflow-r {
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+    .tb-toggle-track.has-overflow-l:not(.has-overflow-r) {
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+                mask-image: linear-gradient(90deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+    }
+    .tb-toggle-track:not(.has-overflow-l).has-overflow-r {
+        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+
+    /* ── Sliding thumb (::before pseudo on .tb-toggle-track) ─────────
+       Lives INSIDE the scroll track, so it scrolls with the buttons naturally
+       when the user scrolls/drags. positionThumb writes --thumb-x as
+       active.offsetLeft (independent of scroll position) — the visible thumb
+       position = (offsetLeft − scrollLeft), which always lands under the
+       active button regardless of scroll. */
+    .tb-toggle-track::before {
         content: "";
         position: absolute;
         top: var(--toggle-padding);
@@ -216,7 +340,88 @@
         z-index: 0;
         opacity: 0;
     }
-    .tb-toggle.tb-ready::before { opacity: 1; }
+    .tb-toggle-track.tb-ready::before { opacity: 1; }
+
+    /* ── Per-button shimmer (::after pseudo on .tb-btn) ────────────
+       Each button gets its own sweeping highlight band, tinted by ITS row's
+       FX-resolved color (--btn-shimmer-rgb, set per button by applyButtonColors
+       from animation.shimmerColor). Falls back to the global --tb-shimmer-rgb
+       (Animation Color picker default) when no FX rule is set.
+
+       All buttons share the same keyframe + duration + direction, so the bands
+       animate in lockstep — visually a coordinated wave that picks up each
+       value's color in turn. mix-blend-mode: screen brightens whatever's
+       underneath (track gradient + thumb behind the active button), so the
+       band reads as light hitting glass rather than a flat overlay.
+
+       Disabled by default (display: none); the JS toggles `.tb-shimmer` on the
+       root to switch it on globally. */
+    /* ── Mode A: Per-Value shimmer (.tb-btn::after) ─────────────
+       Each button shimmers in its OWN row's FX color (--btn-shimmer-rgb).
+       All bands share the same keyframe so they pulse together — a coordinated
+       multi-color wave where every value lights up simultaneously in its own hue. */
+    .tb-btn::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 2;
+        display: none;
+        opacity: var(--tb-shimmer-opacity, 1);
+        background-image: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(var(--btn-shimmer-rgb, var(--tb-shimmer-rgb, 255, 255, 255)), 0.55) 50%,
+            transparent 100%
+        );
+        background-size: 50% 100%;
+        background-repeat: no-repeat;
+        background-position: -200% 0;
+        mix-blend-mode: screen;
+    }
+    &.tb-shimmer-per-value .tb-btn::after {
+        display: block;
+        animation: tb-shimmer-sweep var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
+    }
+
+    /* ── Mode B: Wave shimmer (.tb-toggle::after) ────────────────
+       ONE band sweeps the full toggle. The COLOR is a stationary multi-stop
+       gradient (--tb-shimmer-track-gradient) where each button occupies its
+       own slice of the track (built by JS from per-row FX colors). The
+       HIGHLIGHT is a CSS mask — a single peak whose mask-position animates
+       from -200% to 200%, revealing the underlying gradient one button at a
+       time. Net effect: as the band crosses each button, its visible tint
+       switches to that button's FX color. */
+    .tb-toggle::after {
+        content: "";
+        position: absolute;
+        top:    var(--toggle-padding);
+        bottom: var(--toggle-padding);
+        left:   var(--toggle-padding);
+        right:  var(--toggle-padding);
+        border-radius: calc(var(--toggle-radius) - var(--toggle-padding));
+        pointer-events: none;
+        z-index: 2;
+        display: none;
+        opacity: var(--tb-shimmer-opacity, 1);
+        background-image: var(--tb-shimmer-track-gradient,
+            linear-gradient(90deg, rgba(var(--tb-shimmer-rgb, 255, 255, 255), 0.55), rgba(var(--tb-shimmer-rgb, 255, 255, 255), 0.55)));
+        /* Single highlight peak as the alpha mask; its position is what animates */
+        -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 50%, transparent 100%);
+                mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 50%, transparent 100%);
+        -webkit-mask-size: 50% 100%;
+                mask-size: 50% 100%;
+        -webkit-mask-repeat: no-repeat;
+                mask-repeat: no-repeat;
+        -webkit-mask-position: -200% 0;
+                mask-position: -200% 0;
+        mix-blend-mode: screen;
+    }
+    &.tb-shimmer-wave .tb-toggle::after {
+        display: block;
+        animation: tb-shimmer-mask-sweep var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
+    }
 
     /* ── Buttons inside the track ────────────────────────────────── */
     .tb-btn {
@@ -320,4 +525,20 @@
         }
         &.tb-error .tb-landing-title { color: #dc2626; }
     }
+}
+
+/* Keyframes must live at the top level, not inside .tb-root */
+@keyframes tb-shimmer-sweep {
+    /* Forward pass: band starts off-screen LEFT, slides to off-screen RIGHT.
+       animation-direction: alternate makes the next pass run in reverse
+       (right → left), giving the ping-pong effect. */
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+}
+@keyframes tb-shimmer-mask-sweep {
+    /* Wave-mode counterpart of tb-shimmer-sweep — animates the MASK position so
+       the underlying multi-stop color gradient stays stationary while a single
+       highlight peak sweeps across, revealing each button's color in turn. */
+    from { -webkit-mask-position: -200% 0; mask-position: -200% 0; }
+    to   { -webkit-mask-position:  200% 0; mask-position:  200% 0; }
 }

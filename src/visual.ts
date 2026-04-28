@@ -67,6 +67,11 @@ interface ToggleState {
     titleEl:  HTMLDivElement | null;
     wrapEl:   HTMLDivElement | null;
     toggleEl: HTMLDivElement | null;
+    /** Inner scroll track inside .tb-toggle. Hosts the thumb (::before) and the
+     *  buttons. When the buttons' total width exceeds the toggle's available
+     *  width, the track scrolls horizontally — scrollbar hidden, edges fade
+     *  via mask-image, drag-to-scroll via pointer events. */
+    trackEl:  HTMLDivElement | null;
     /** Per-side DOM refs, parallel arrays indexed by side position (0 = A, 1 = B, 2 = C, …).
      *  Length matches the number of rendered buttons (= items.length at render time).
      *  Generalized from named A/B/C refs so the visual handles any number of distinct
@@ -569,7 +574,7 @@ export class Visual implements IVisual {
             lastDriverVal: null,
             lastSortKey: "",
             lastUpstreamKey: "",
-            blockEl: null, titleEl: null, wrapEl: null, toggleEl: null,
+            blockEl: null, titleEl: null, wrapEl: null, toggleEl: null, trackEl: null,
             btnEls: [], symEls: [], lblEls: [],
             resizeObs: null
         };
@@ -683,12 +688,28 @@ export class Visual implements IVisual {
                 if (!otherSet.has(otherStr)) { matches = false; break; }
             }
             if (!matches) { rowsSkipped++; continue; }
-            rowsKept++;
 
-            const k = values[r] == null ? "(blank)" : String(values[r]);
+            // ── Blank-value filter (per /generic-pbi-blank-row-col-filter) ──
+            // Skip rows whose field value is null OR an empty/whitespace-only
+            // string. These rows appear when:
+            //   • the column has genuine NULL cells in the source data
+            //   • "Show items with no data" is enabled in the field well —
+            //     PBI emits rows for categories that have no fact rows
+            //   • cross-filter from another visual leaves a category with no
+            //     fact data but PBI still keeps the dim row
+            // None of those produce a meaningful toggle button; drop them.
+            // (PBI already drops cross-product rows where every bound measure
+            // returns BLANK — see capabilities.json defaultValue description —
+            // so we only need to handle the field-value case here.)
+            const fv = values[r];
+            if (fv == null) { rowsSkipped++; continue; }
+            if (typeof fv === "string" && fv.trim() === "") { rowsSkipped++; continue; }
+
+            rowsKept++;
+            const k = String(fv);
             if (seen.has(k)) continue;
             seen.add(k);
-            distinct.push({ raw: values[r], idx: r });
+            distinct.push({ raw: fv, idx: r });
             // No upper cap — let the visual render whatever PBI's dataReductionAlgorithm
             // delivers. The toggle pill stretches via flexbox so any count fits;
             // symbols A/B/C are the only labelled positions, sides D+ render label-only.
@@ -706,11 +727,12 @@ export class Visual implements IVisual {
         if (!upstreamChanged && n >= 1 && n < tog.cachedItems.length && tog.cachedItems.length >= 2) {
             this.log(`  parseToggle(${tog.queryName}) CACHE-FALLBACK n=${n} < cache=${tog.cachedItems.length} (upstream unchanged) → keep cached items, selectedValue=${tog.selectedValue}`);
             tog.items = tog.cachedItems;
-            if (n === 1) {
-                const remaining = distinct[0].raw == null ? "(blank)" : String(distinct[0].raw);
-                const match = tog.items.find(it => it.value === remaining);
-                if (match) this.setSelection(tog, [match.value]);
-            }
+            // Note: when the cache fallback fires with n=1 (PBI transiently
+            // shrunk to a single value), we used to auto-select that value.
+            // Removed — auto-selecting on shrinkage was the same wrong UX as
+            // cascade-reset auto-snap. The user's existing selection is preserved
+            // (cache items still hold all buttons; whichever was selected stays
+            // selected, even if currently not in `distinct`).
             return { ok: true, distinctCount: n };
         }
 
@@ -745,7 +767,14 @@ export class Visual implements IVisual {
                     return { value: display, display, selectionId: sid, rowIdx: d.idx };
                 });
                 tog.cachedItems = tog.items;
-                tog.hasRestoredSelection = false;
+                // DELIBERATELY do NOT reset hasRestoredSelection here. The "set
+                // changed" trigger fires on every external filter (cross-filter
+                // from another visual narrows the toggle's available values),
+                // and resetting hasRestoredSelection would re-run the first-bind
+                // auto-default path on every filter — which would auto-select a
+                // value the user never asked for. hasRestoredSelection is reset
+                // ONLY on actual field rebinding (queryName change), handled
+                // earlier in parseToggle.
             }
         };
 
@@ -800,19 +829,25 @@ export class Visual implements IVisual {
                     this.log(`  parseToggle(${tog.queryName}) n=${n}: force-reactivate (default A)=${tog.items[0].value}`);
                 }
             } else {
-                // Cascade-reset: drop selectedSet entries no longer in items. If the
-                // resulting set is empty AND we previously had a selection AND the user
-                // didn't deliberately clear (set was non-empty before this update), snap
-                // to the first available value.
+                // Cascade-reset: drop selectedSet entries no longer in items.
+                // If the resulting set is empty (e.g., user's selection isn't in
+                // the externally-filtered context anymore), CLEAR — never auto-snap
+                // to first. A native slicer doesn't auto-select on external filter,
+                // and neither should this. Force Selection is the one exception: it
+                // explicitly opts into "no empty state", so under Force we DO snap.
                 const before = tog.selectedSet.size;
                 const filtered = Array.from(tog.selectedSet).filter(v =>
                     tog.items.some(it => it.value === v));
                 if (filtered.length !== before) {
                     if (filtered.length === 0 && before > 0) {
-                        // All previously-selected entries are gone — snap to first to
-                        // avoid an empty filter that would un-cascade downstream.
-                        this.setSelection(tog, [tog.items[0].value]);
-                        this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-reset (all dropped) → ${tog.items[0].value}`);
+                        const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
+                        if (force) {
+                            this.setSelection(tog, [tog.items[0].value]);
+                            this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-reset (all dropped, Force ON) → ${tog.items[0].value}`);
+                        } else {
+                            this.clearSelection(tog);
+                            this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-reset (all dropped) → cleared`);
+                        }
                     } else {
                         this.setSelection(tog, filtered);
                         this.log(`  parseToggle(${tog.queryName}) n=${n}: cascade-trim → [${filtered.join(",")}]`);
@@ -838,7 +873,10 @@ export class Visual implements IVisual {
             }];
             if (!cachedSame) {
                 tog.cachedItems = tog.items;
-                tog.hasRestoredSelection = false;
+                // Same rationale as the n>=2 branch: do NOT reset
+                // hasRestoredSelection on every "value changed" — that would
+                // re-trigger the first-bind auto-default on each external
+                // filter. Reset only on actual field rebinding.
             }
 
             if (!tog.hasRestoredSelection) {
@@ -857,9 +895,18 @@ export class Visual implements IVisual {
                     this.log(`  parseToggle(${tog.queryName}): first bind (n=1) — default selected=${display}${force ? " (Force ON, ignoring \"\" sentinel)" : ""}`);
                 }
             } else if (tog.selectedValue != null && tog.selectedValue !== display) {
-                // Cascade-reset (n=1): only one option available, snap to it.
-                this.setSelection(tog, [display]);
-                this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1) → ${tog.selectedValue}`);
+                // Cascade-reset (n=1): user had a previous selection that's no
+                // longer in the filtered context. Clear instead of auto-snapping
+                // to the (now lone) remaining value — auto-selecting on external
+                // filter is the wrong UX. Force Selection is the only override.
+                const force = this.resolveBool("selection", "forceSelection", tog.queryName, false);
+                if (force) {
+                    this.setSelection(tog, [display]);
+                    this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1, Force ON) → ${display}`);
+                } else {
+                    this.clearSelection(tog);
+                    this.log(`  parseToggle(${tog.queryName}): cascade-reset (n=1) → cleared`);
+                }
             } else if (tog.selectedSet.size === 0 &&
                 this.resolveBool("selection", "forceSelection", tog.queryName, false)) {
                 // Force-Selection retroactivity (n=1).
@@ -983,12 +1030,11 @@ export class Visual implements IVisual {
         const source = cat.source as { queryName?: string; expr?: { source?: { entity?: string }; ref?: string } } | undefined;
         let table = "";
         let column = "";
-        const expr = source?.expr;
-        if (expr?.source?.entity && expr?.ref) {
-            table = expr.source.entity;
-            column = expr.ref;
-        } else if (source?.queryName) {
-            // queryName format: "Table.Column" (or "Table.Measure"). Use first dot as split.
+        // queryName is the most reliable signal — it's what every Microsoft-published
+        // slicer (SampleSlicer, HierarchySlicer) splits on. expr.source.entity may
+        // resolve to an internal entity name that doesn't match the user-visible
+        // table reference other visuals are bound to, breaking cross-filter.
+        if (source?.queryName) {
             const qn = source.queryName;
             const dotIdx = qn.indexOf(".");
             if (dotIdx > 0) {
@@ -996,15 +1042,23 @@ export class Visual implements IVisual {
                 column = qn.substring(dotIdx + 1);
             }
         }
+        // Last-resort fallback to expr if queryName is missing
+        if ((!table || !column) && source?.expr?.source?.entity && source?.expr?.ref) {
+            table = source.expr.source.entity;
+            column = source.expr.ref;
+        }
         this.log(`  buildBasicFilter qn=${source?.queryName} → target={table:${table}, column:${column}} values=[${rawValues.map(v => `${v}<${typeof v}>`).join(", ")}]`);
         if (!table || !column) return null;
         if (rawValues.length === 0) return null;
+        // IBasicFilter shape — matches Microsoft SampleSlicer & HierarchySlicer.
+        // Note the http (not https) schema URL — that's what powerbi-models v1
+        // emits and what PBI Desktop's validator accepts cross-version.
         return {
             $schema: "http://powerbi.com/product/schema#basic",
             target: { table, column },
             operator: "In",
             values: rawValues,
-            filterType: 1
+            filterType: 1 // FilterType.Basic
         };
     }
 
@@ -1047,10 +1101,9 @@ export class Visual implements IVisual {
             }
         }
         const action = filters.length === 0
-            ? 1 /* FilterAction.remove — clears all filters from this visual */
-            : 0 /* FilterAction.merge — replaces filter set with these */;
+            ? 1 /* FilterAction.remove */
+            : 0 /* FilterAction.merge */;
         this.log(`commitSelections() applyJsonFilter filters=${filters.length} action=${action} [${tracelog.join(", ")}]`);
-        // Dump the full filter payload so the actual JSON sent to PBI is visible
         for (let i = 0; i < filters.length; i++) {
             this.log(`  filter[${i}]=${JSON.stringify(filters[i])}`);
         }
@@ -1162,6 +1215,13 @@ export class Visual implements IVisual {
             lblEl.style.color = labelColor;
             symEl.style.color = symColor;
             btnEl.style.setProperty("--btn-glow-color", hexToRgbTriplet(btnGlowHex));
+
+            // Per-button shimmer color — driven by the animation.shimmerColor FX rule.
+            // Each button reads its OWN row's resolved color so the sweep tints each
+            // value differently while all bands stay synchronized to the same keyframe
+            // (one continuous wave across the toggle in N distinct colors).
+            const btnShimmerHex = this.colorForRow(tog, item.rowIdx, "animation", "shimmerColor", "#FFFFFF");
+            btnEl.style.setProperty("--btn-shimmer-rgb", hexToRgbTriplet(btnShimmerHex, "255, 255, 255"));
         }
 
         // Thumb glow color follows the PRIMARY active button's row (selectedValue tracks
@@ -1188,7 +1248,7 @@ export class Visual implements IVisual {
         // Disconnect every per-toggle resize observer before nuking the DOM
         for (const t of this.toggles) {
             if (t.resizeObs) { t.resizeObs.disconnect(); t.resizeObs = null; }
-            t.blockEl = null; t.titleEl = null; t.wrapEl = null; t.toggleEl = null;
+            t.blockEl = null; t.titleEl = null; t.wrapEl = null; t.toggleEl = null; t.trackEl = null;
             t.btnEls = []; t.symEls = []; t.lblEls = [];
         }
         while (this.root.firstChild) this.root.removeChild(this.root.firstChild);
@@ -1276,8 +1336,21 @@ export class Visual implements IVisual {
 
         const togglesWrap = document.createElement("div");
         togglesWrap.className = "tb-toggles-wrap";
+        // Tag with the resolved orientation so CSS picks the right axis for
+        // overflow + mask. is-axis-x = horizontal scroll, is-axis-y = vertical.
+        togglesWrap.classList.add(orientation === "vertical" ? "is-axis-y" : "is-axis-x");
         this.togglesWrapEl = togglesWrap;
         this.root.appendChild(togglesWrap);
+
+        // Wire scroll + edge fade + drag at the wrap level. When the user binds
+        // multiple fields and the visual container can't fit them all, the wrap
+        // scrolls along its layout axis (horizontal in row orientation, vertical
+        // in column orientation). Same edge-fade + drag UX as the per-toggle track.
+        this.attachScrollInteractions(
+            togglesWrap,
+            orientation === "vertical" ? "y" : "x",
+            "wrap"
+        );
 
         // Right-click context menu — uses any single-toggle's selection if one is set
         this.root.addEventListener("contextmenu", (e: MouseEvent) => {
@@ -1332,13 +1405,24 @@ export class Visual implements IVisual {
         toggle.setAttribute("role", "group");
         tog.toggleEl = toggle;
 
+        // Inner scroll track. Hosts the sliding thumb (::before) and the buttons.
+        // .tb-toggle is the visible pill chrome; .tb-toggle-track is the scroll
+        // viewport — overflow-x:auto, scrollbar hidden, edge fade via mask-image,
+        // drag-to-scroll via pointer events. When buttons fit, looks identical
+        // to before. When they overflow (e.g. 12 months at fixed size in a small
+        // container), the track scrolls horizontally without showing a scrollbar.
+        const track = document.createElement("div");
+        track.className = "tb-toggle-track";
+        tog.trackEl = track;
+        toggle.appendChild(track);
+
         tog.btnEls = [];
         tog.symEls = [];
         tog.lblEls = [];
         const sideCount = Math.max(tog.items.length, 1);
         for (let i = 0; i < sideCount; i++) {
             const { btn, sym, lbl } = this.buildButton(tog, idx, i);
-            toggle.appendChild(btn);
+            track.appendChild(btn);
             tog.btnEls.push(btn);
             tog.symEls.push(sym);
             tog.lblEls.push(lbl);
@@ -1347,13 +1431,194 @@ export class Visual implements IVisual {
         block.appendChild(wrap);
 
         this.refreshActiveClasses(tog);
+        this.attachTrackInteractions(tog);
 
-        // Per-toggle resize observer
+        // Per-toggle resize observer — recompute thumb position AND edge-fade
+        // visibility classes when the toggle's size changes (window resize,
+        // adding/removing buttons, format-pane size change).
         if (typeof ResizeObserver !== "undefined") {
             tog.resizeObs = new ResizeObserver(() => {
-                requestAnimationFrame(() => this.positionThumb(tog));
+                requestAnimationFrame(() => {
+                    this.positionThumb(tog);
+                    this.updateEdgeFades(tog);
+                });
             });
             tog.resizeObs.observe(toggle);
+        }
+    }
+
+    /** Wire pointer-drag scroll + scroll-driven edge-fade visibility for ONE
+     *  toggle's track (always horizontal). Idempotent at the listener level:
+     *  each render rebuilds the track DOM, so listeners are fresh per render. */
+    private attachTrackInteractions(tog: ToggleState): void {
+        if (!tog.trackEl) return;
+        this.attachScrollInteractions(tog.trackEl, "x", `track[${tog.queryName}]`);
+    }
+
+    /** Generic scroll-interaction wiring for any horizontally OR vertically
+     *  scrollable element. Adds:
+     *    • Scroll listener that flips .has-overflow-{l|r|t|b} classes (drives
+     *      the conditional mask-image edge fade in CSS).
+     *    • Pointer-drag scroll (mouse + pen + touch via Pointer Events).
+     *    • Click suppression after a real drag (>5px) so dragging doesn't
+     *      activate buttons under the cursor.
+     *    • Wheel-to-scroll translation: vertical mouse wheel scrolls the
+     *      element along its axis, even if the browser would normally route
+     *      vertical wheel to a parent.
+     *  axis: "x" = horizontal, "y" = vertical. */
+    private attachScrollInteractions(el: HTMLElement, axis: "x" | "y", logTag: string): void {
+        // ── Scroll-driven edge-fade classes ──────────────────────────
+        const updateFades = () => {
+            if (axis === "x") {
+                const max = el.scrollWidth - el.clientWidth;
+                const v = el.scrollLeft;
+                el.classList.toggle("has-overflow-l", v > 4);
+                el.classList.toggle("has-overflow-r", v < max - 4);
+            } else {
+                const max = el.scrollHeight - el.clientHeight;
+                const v = el.scrollTop;
+                el.classList.toggle("has-overflow-t", v > 4);
+                el.classList.toggle("has-overflow-b", v < max - 4);
+            }
+        };
+        el.addEventListener("scroll", updateFades, { passive: true });
+
+        // ── Drag-to-scroll ───────────────────────────────────────────
+        // Two-phase activation:
+        //   Phase 1 (pointerdown): track the press but DO NOT capture the pointer
+        //     yet. If the user releases without moving (= a click), the click event
+        //     fires on its natural target (the button) because no capture was set.
+        //   Phase 2 (pointermove past threshold): user is actually dragging — NOW
+        //     we set pointer capture, add .is-dragging, and start scrolling. From
+        //     this point on click is suppressed in capture phase.
+        //
+        // This avoids the spec gotcha where setPointerCapture reroutes the click
+        // event target to the captured element, swallowing button clicks.
+        let pressed = false;
+        let captured = false;
+        let activePointerId = -1;
+        let startCoord = 0;
+        let startScroll = 0;
+        let movedPx = 0;
+        let scrollMoved = false;
+        const DRAG_THRESHOLD = 8;
+
+        const isScrollable = () => {
+            const sd = axis === "x" ? el.scrollWidth  - el.clientWidth
+                                    : el.scrollHeight - el.clientHeight;
+            return sd > 1;
+        };
+
+        el.addEventListener("pointerdown", (e: PointerEvent) => {
+            if (e.button !== 0 && e.pointerType === "mouse") return;
+            if (!isScrollable()) return;
+            pressed = true;
+            captured = false;
+            activePointerId = e.pointerId;
+            movedPx = 0;
+            scrollMoved = false;
+            startCoord  = axis === "x" ? e.pageX : e.pageY;
+            startScroll = axis === "x" ? el.scrollLeft : el.scrollTop;
+            // NB: no setPointerCapture here, no .is-dragging class yet — see header.
+            this.log(`press ${logTag} axis=${axis}`);
+        });
+
+        el.addEventListener("pointermove", (e: PointerEvent) => {
+            if (!pressed) return;
+            const d = (axis === "x" ? e.pageX : e.pageY) - startCoord;
+            movedPx = Math.max(movedPx, Math.abs(d));
+
+            // Promote to a real drag once cursor passes the threshold
+            if (!captured && movedPx > DRAG_THRESHOLD) {
+                captured = true;
+                el.classList.add("is-dragging");
+                try { el.setPointerCapture(activePointerId); } catch (_) { /* ignore */ }
+                this.log(`drag start ${logTag} axis=${axis}`);
+            }
+            if (!captured) return;
+
+            const before = axis === "x" ? el.scrollLeft : el.scrollTop;
+            if (axis === "x") el.scrollLeft = startScroll - d;
+            else              el.scrollTop  = startScroll - d;
+            const after = axis === "x" ? el.scrollLeft : el.scrollTop;
+            if (after !== before) scrollMoved = true;
+        });
+
+        const endPress = () => {
+            if (!pressed) return;
+            pressed = false;
+            if (captured) {
+                el.classList.remove("is-dragging");
+                try { el.releasePointerCapture(activePointerId); } catch (_) { /* ignore */ }
+            }
+            captured = false;
+            activePointerId = -1;
+        };
+        el.addEventListener("pointerup",     endPress);
+        el.addEventListener("pointercancel", endPress);
+        el.addEventListener("pointerleave",  endPress);
+
+        // Capture-phase click suppression — only when an actual drag happened
+        // (cursor crossed threshold AND scroll position changed).
+        el.addEventListener("click", (e: MouseEvent) => {
+            if (movedPx > DRAG_THRESHOLD && scrollMoved) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            movedPx = 0;
+            scrollMoved = false;
+        }, true);
+
+        // ── Wheel → axis scroll ──────────────────────────────────────
+        // For horizontal: vertical wheel translates to horizontal scroll
+        // (browsers normally only do this with Shift held).
+        // For vertical: native browser behavior already works for vertical
+        // wheel on a vertically-scrollable element, so we only intervene
+        // when the element actually has overflow.
+        el.addEventListener("wheel", (e: WheelEvent) => {
+            const overflow = axis === "x"
+                ? el.scrollWidth  - el.clientWidth
+                : el.scrollHeight - el.clientHeight;
+            if (overflow <= 1) return;
+            const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+            if (d === 0) return;
+            if (axis === "x") el.scrollLeft += d;
+            else              el.scrollTop  += d;
+            e.preventDefault();
+        }, { passive: false });
+
+        // Initial paint
+        updateFades();
+    }
+
+    /** Update edge-fade classes for a single toggle's track. Called from the
+     *  toggle's ResizeObserver and post-render rAF. */
+    private updateEdgeFades(tog: ToggleState): void {
+        const track = tog.trackEl;
+        if (!track) return;
+        const max = track.scrollWidth - track.clientWidth;
+        const x = track.scrollLeft;
+        track.classList.toggle("has-overflow-l", x > 4);
+        track.classList.toggle("has-overflow-r", x < max - 4);
+    }
+
+    /** Update edge-fade classes for the toggles-wrap container. Axis depends
+     *  on the resolved orientation (horizontal → l/r, vertical → t/b). */
+    private updateWrapEdgeFades(): void {
+        const wrap = this.togglesWrapEl;
+        if (!wrap) return;
+        if (wrap.classList.contains("is-axis-y")) {
+            const max = wrap.scrollHeight - wrap.clientHeight;
+            const v = wrap.scrollTop;
+            wrap.classList.toggle("has-overflow-t", v > 4);
+            wrap.classList.toggle("has-overflow-b", v < max - 4);
+            wrap.classList.remove("has-overflow-l", "has-overflow-r");
+        } else {
+            const max = wrap.scrollWidth - wrap.clientWidth;
+            const v = wrap.scrollLeft;
+            wrap.classList.toggle("has-overflow-l", v > 4);
+            wrap.classList.toggle("has-overflow-r", v < max - 4);
+            wrap.classList.remove("has-overflow-t", "has-overflow-b");
         }
     }
 
@@ -1398,14 +1663,15 @@ export class Visual implements IVisual {
      *  Feb → April) don't trigger renderAll's full DOM nuke + rebuild — the visual
      *  patches in place and the user doesn't see a flicker. */
     private syncButtonCount(tog: ToggleState): void {
-        if (!tog.toggleEl) return;
+        const host = tog.trackEl || tog.toggleEl;
+        if (!host) return;
         const target = Math.max(tog.items.length, 1);
         const toggleIdx = this.toggles.indexOf(tog);
         if (toggleIdx < 0) return;
         while (tog.btnEls.length < target) {
             const sideIdx = tog.btnEls.length;
             const { btn, sym, lbl } = this.buildButton(tog, toggleIdx, sideIdx);
-            tog.toggleEl.appendChild(btn);
+            host.appendChild(btn);
             tog.btnEls.push(btn);
             tog.symEls.push(sym);
             tog.lblEls.push(lbl);
@@ -1418,54 +1684,35 @@ export class Visual implements IVisual {
         }
     }
 
-    /** Compute --thumb-x and --thumb-w from active button rect relative to track for ONE toggle. */
+    /** Compute --thumb-x and --thumb-w for the sliding thumb. The thumb is a
+     *  ::before pseudo of .tb-toggle-track (NOT .tb-toggle), so it lives inside
+     *  the scroll container and naturally moves with the buttons when the track
+     *  scrolls horizontally — no need to recompute on scroll. We use offsetLeft
+     *  (relative to track's padding box) instead of bbox-diff because offsetLeft
+     *  is independent of the scroll position, while bbox.left reflects the
+     *  current scrolled screen position. */
     private positionThumb(tog: ToggleState): void {
-        if (!tog.toggleEl || tog.btnEls.length === 0) return;
-        // Cleared state: hide thumb (no active button to slide over).
-        if (tog.selectedValue == null || tog.selectedSet.size === 0) {
-            tog.toggleEl.classList.remove("tb-ready");
-            return;
-        }
-        // Multi-select with size > 1: hide the sliding thumb — there's no single anchor
-        // to slide between. Each selected button gets a `multi-active` class instead
-        // (driven by refreshActiveClasses) which paints its own fill.
-        if (tog.selectedSet.size > 1) {
-            tog.toggleEl.classList.remove("tb-ready");
+        const track = tog.trackEl;
+        if (!track || tog.btnEls.length === 0) return;
+        // Cleared state OR multi-select with size > 1: hide thumb. Multi mode
+        // paints each selected button's own fill via .multi-active instead.
+        if (tog.selectedValue == null || tog.selectedSet.size === 0 || tog.selectedSet.size > 1) {
+            track.classList.remove("tb-ready");
             return;
         }
         const activeIdx = tog.items.findIndex(it => it.value === tog.selectedValue);
         const active = activeIdx >= 0 ? tog.btnEls[activeIdx] : tog.btnEls[0];
         if (!active) return;
 
-        // Reset any prior overflow-safety transform so getBoundingClientRect is unscaled
-        const priorTransform = tog.toggleEl.style.transform;
-        tog.toggleEl.style.transform = "";
-
-        const t = tog.toggleEl.getBoundingClientRect();
-        const a = active.getBoundingClientRect();
-        const padNum = parseFloat(getComputedStyle(tog.toggleEl).getPropertyValue("--toggle-padding")) || 0;
-        const x = a.left - t.left - padNum;
-        const w = a.width + 6;
-        tog.toggleEl.style.setProperty("--thumb-x", x + "px");
-        tog.toggleEl.style.setProperty("--thumb-w", w + "px");
-        tog.toggleEl.classList.add("tb-ready");
-
-        // Width-overflow safety
-        if (this.viewportW > 0 && this.viewportH > 0 && tog.wrapEl) {
-            const wrapW = tog.wrapEl.clientWidth - 2;
-            const wrapH = tog.wrapEl.clientHeight - 2;
-            const tW = tog.toggleEl.offsetWidth;
-            const tH = tog.toggleEl.offsetHeight;
-            const sx = tW > wrapW && tW > 0 ? wrapW / tW : 1;
-            const sy = tH > wrapH && tH > 0 ? wrapH / tH : 1;
-            const s = Math.min(sx, sy, 1);
-            if (s < 0.999) {
-                tog.toggleEl.style.transform = `scale(${s})`;
-                tog.toggleEl.style.transformOrigin = "center center";
-            } else if (priorTransform) {
-                tog.toggleEl.style.transform = "";
-            }
-        }
+        const padNum = parseFloat(getComputedStyle(track).getPropertyValue("--toggle-padding")) || 0;
+        // active.offsetLeft = offset relative to its offsetParent (.tb-toggle-track,
+        // which is positioned). Independent of track.scrollLeft, so the thumb stays
+        // glued to its button as the user scrolls.
+        const x = active.offsetLeft - padNum;
+        const w = active.offsetWidth + 6;
+        track.style.setProperty("--thumb-x", x + "px");
+        track.style.setProperty("--thumb-w", w + "px");
+        track.classList.add("tb-ready");
     }
 
     private applyLayout(): void {
@@ -1555,7 +1802,11 @@ export class Visual implements IVisual {
         } else {
             const fixedSize = Math.max(8, Math.min(400, Number(s.sizing.size.value) || REFERENCE_H));
             scaleVal = fixedSize / REFERENCE_H;
-            textScale = scaleVal;
+            // Text stays at the EXACT label/symbol font sizes set under Content,
+            // independent of the toggle's pixel size. Same rule as fit mode — the
+            // chrome (padding, gap, thumb spread) scales with --tb-scale, but font
+            // sizes are author-controlled and never derived from the toggle size.
+            textScale = 1;
         }
         root.style.setProperty("--tb-scale", String(scaleVal));
         root.style.setProperty("--tb-text-scale", String(textScale));
@@ -1683,12 +1934,57 @@ export class Visual implements IVisual {
         const ease = (s.animation.transitionEase.value as { value?: string })?.value || "cubic-bezier(.22,.61,.36,1)";
         root.style.setProperty("--transition-ease", ease);
 
+        // ── Shimmer (global): horizontally-sweeping highlight band on .tb-toggle::after.
+        // Tinted by the Animation Color picker, composited with mix-blend-mode: screen so
+        // it lights up whatever fill is underneath (track + thumb + active button).
+        const shimmerOn = s.animation.shimmerEnabled.value === true;
+        const shimmerMode = (s.animation.shimmerMode.value as { value?: string })?.value || "perValue";
+        this.root.classList.toggle("tb-shimmer", shimmerOn);
+        this.root.classList.toggle("tb-shimmer-wave", shimmerOn && shimmerMode === "wave");
+        this.root.classList.toggle("tb-shimmer-per-value", shimmerOn && shimmerMode !== "wave");
+        if (shimmerOn) {
+            const shimmerHex = clr(s.animation.shimmerColor as formattingSettings.ColorPicker, "#FFFFFF");
+            root.style.setProperty("--tb-shimmer-rgb", hexToRgbTriplet(shimmerHex, "255, 255, 255"));
+            const shimmerDur = Math.max(200, Math.min(20000, Number(s.animation.shimmerDuration.value) || 2500));
+            root.style.setProperty("--tb-shimmer-dur", shimmerDur + "ms");
+            const shimmerOpacityPct = Math.max(0, Math.min(100, Number(s.animation.shimmerOpacity.value) || 0));
+            root.style.setProperty("--tb-shimmer-opacity", String(shimmerOpacityPct / 100));
+
+            // Wave mode: build a stationary multi-stop gradient per toggle where each
+            // button occupies its own slice of the track (sharp transitions at button
+            // boundaries). The CSS-side mask sweeps a single highlight peak across,
+            // revealing the underlying gradient at the band's current x-position — so
+            // the band's visible color is the button it's currently over. Buttons are
+            // flex:1 (equal width) so positions are 100/N % per slice.
+            if (shimmerMode === "wave") {
+                for (const t of this.toggles) {
+                    if (!t.toggleEl || t.items.length === 0) continue;
+                    const N = t.items.length;
+                    const fallbackHex = clr(s.animation.shimmerColor as formattingSettings.ColorPicker, "#FFFFFF");
+                    const stops: string[] = [];
+                    for (let i = 0; i < N; i++) {
+                        const item = t.items[i];
+                        const hex = this.colorForRow(t, item.rowIdx, "animation", "shimmerColor", fallbackHex);
+                        const startPct = (i * 100 / N).toFixed(4);
+                        const endPct   = ((i + 1) * 100 / N).toFixed(4);
+                        stops.push(`${hex} ${startPct}%`, `${hex} ${endPct}%`);
+                    }
+                    const grad = `linear-gradient(90deg, ${stops.join(", ")})`;
+                    t.toggleEl.style.setProperty("--tb-shimmer-track-gradient", grad);
+                }
+            }
+        }
+
         // ── Sync active classes + reposition each thumb
         for (const t of this.toggles) {
             this.refreshActiveClasses(t);
         }
         requestAnimationFrame(() => {
-            for (const t of this.toggles) this.positionThumb(t);
+            for (const t of this.toggles) {
+                this.positionThumb(t);
+                this.updateEdgeFades(t);
+            }
+            this.updateWrapEdgeFades();
         });
 
         // Commit decisions live in update() (diff between pre-parse snapshot and post-parse
