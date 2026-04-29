@@ -229,6 +229,24 @@
         justify-content: center;
         min-width: 0;
     }
+
+    /* ── Equal-Width Buttons (Sizing card toggle) ─────────────────
+       Forces every button to share the toggle width equally. In Fit mode this
+       is the implicit behavior; this class extends it to Fixed mode by
+       setting the toggle to width:100% (so flex-basis:0 buttons have a
+       definite shared space) and applying flex:1 to each button. When OFF,
+       per-mode defaults apply (Fit = equal share, Fixed = natural width). */
+    &.tb-equal-width .tb-toggle {
+        width: 100%;
+    }
+    &.tb-equal-width .tb-toggle-track {
+        width: 100%;
+    }
+    &.tb-equal-width .tb-btn {
+        flex: 1 1 0;
+        justify-content: center;
+        min-width: 0;
+    }
     &.tb-fit .tb-lbl, &.tb-fit .tb-sym {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -380,7 +398,7 @@
         background-position: -200% 0;
         mix-blend-mode: screen;
     }
-    &.tb-shimmer-per-value .tb-btn::after {
+    .tb-block.tb-shimmer-per-value .tb-btn::after {
         display: block;
         animation: tb-shimmer-sweep var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
     }
@@ -418,7 +436,7 @@
                 mask-position: -200% 0;
         mix-blend-mode: screen;
     }
-    &.tb-shimmer-wave .tb-toggle::after {
+    .tb-block.tb-shimmer-wave .tb-toggle::after {
         display: block;
         animation: tb-shimmer-mask-sweep var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
     }

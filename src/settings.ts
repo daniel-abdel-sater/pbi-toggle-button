@@ -138,10 +138,15 @@ class SizingCard extends FormattingSettingsCard {
         description: "Master size of the toggle in pixels — drives both height and (proportionally) width. Reference 30 px = default; 60 px = roughly double everything; 15 px = half. Only used when Size Mode = Fixed.",
         value: 31
     });
+    equalWidth = new formattingSettings.ToggleSwitch({
+        name: "equalWidth", displayName: "Equal-Width Buttons",
+        description: "When ON, every value's button is forced to the same width — the toggle fills its container and the N buttons share the space equally regardless of label length. When OFF, each button takes its natural width (label + padding); useful when label widths vary significantly. In Fit Container mode this has no visible effect since the toggle already fills the container with equal-share buttons.",
+        value: false
+    });
 
     name: string = "sizing";
     displayName: string = "Sizing";
-    slices: formattingSettings.Slice[] = [this.sizeMode, this.size];
+    slices: formattingSettings.Slice[] = [this.sizeMode, this.size, this.equalWidth];
 }
 
 // ── Capsule (track shape + surface) ─────────────────────────────────
@@ -454,7 +459,33 @@ class ThumbCard extends FormattingSettingsCard {
 }
 
 // ── Animation ───────────────────────────────────────────────────────
+const TRANSITION_EASE_ITEMS = [
+    { value: "cubic-bezier(.22,.61,.36,1)",   displayName: "Smooth (default)" },
+    { value: "cubic-bezier(.4,0,.2,1)",        displayName: "Material" },
+    { value: "cubic-bezier(.34,1.56,.64,1)",   displayName: "Overshoot" },
+    { value: "ease-out",                        displayName: "Ease Out" },
+    { value: "linear",                          displayName: "Linear" }
+];
+const SHIMMER_MODE_ITEMS = [
+    { value: "perValue", displayName: "Per Value" },
+    { value: "wave",     displayName: "Wave" }
+];
+
 class AnimationCard extends FormattingSettingsCard {
+    // ── Apply-to switcher (items rebuilt at runtime to include bound queryNames)
+    view = new formattingSettings.ItemDropdown({
+        name: "view", displayName: "Apply to",
+        description: "All toggles: edits below apply as defaults to every toggle. Pick a specific toggle to override its animation settings independently.",
+        value: { value: "all", displayName: "All toggles" },
+        items: [{ value: "all", displayName: "All toggles" }]
+    });
+    animationIndexMap = new formattingSettings.TextInput({
+        name: "animationIndexMap", displayName: "Slot Map (internal)",
+        description: "Internal — tracks which slot each field uses so overrides survive field reordering.",
+        value: "", placeholder: ""
+    });
+
+    // ── "All" defaults
     transitionDuration = new formattingSettings.NumUpDown({
         name: "transitionDuration", displayName: "Transition Duration (ms)",
         description: "How long the thumb takes to slide between sides, in milliseconds. 0 = instant snap; 350 = default smooth glide; 600+ = deliberate slow-mo.",
@@ -464,28 +495,18 @@ class AnimationCard extends FormattingSettingsCard {
         name: "transitionEase", displayName: "Transition Easing",
         description: "Acceleration curve. Smooth (default) decelerates naturally. Material is Google's design-system easing. Overshoot bounces slightly past the target before settling. Ease Out softly arrives. Linear has no easing — constant speed.",
         value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" },
-        items: [
-            { value: "cubic-bezier(.22,.61,.36,1)",   displayName: "Smooth (default)" },
-            { value: "cubic-bezier(.4,0,.2,1)",        displayName: "Material" },
-            { value: "cubic-bezier(.34,1.56,.64,1)",   displayName: "Overshoot" },
-            { value: "ease-out",                        displayName: "Ease Out" },
-            { value: "linear",                          displayName: "Linear" }
-        ]
+        items: TRANSITION_EASE_ITEMS
     });
-
     shimmerEnabled = new formattingSettings.ToggleSwitch({
         name: "shimmerEnabled", displayName: "Track Shimmer",
-        description: "When ON, a horizontally-sweeping highlight band travels across the entire toggle (all values), composited with mix-blend-mode: screen so it lights up whatever is underneath. Global — applies to every bound field.",
+        description: "When ON, a horizontally-sweeping highlight band travels across the toggle (all values), composited with mix-blend-mode: screen so it lights up whatever is underneath.",
         value: false
     });
     shimmerMode = new formattingSettings.ItemDropdown({
         name: "shimmerMode", displayName: "Shimmer Mode",
         description: "Per Value: every button shimmers in its OWN FX-resolved color simultaneously, all bands in lockstep. Wave: ONE band sweeps the full toggle and picks up each value's color as it crosses that button — the band itself changes color mid-sweep.",
         value: { value: "perValue", displayName: "Per Value" },
-        items: [
-            { value: "perValue", displayName: "Per Value" },
-            { value: "wave",     displayName: "Wave" }
-        ]
+        items: SHIMMER_MODE_ITEMS
     });
     shimmerColor = new formattingSettings.ColorPicker({
         name: "shimmerColor", displayName: "Shimmer Color",
@@ -505,11 +526,58 @@ class AnimationCard extends FormattingSettingsCard {
         value: 100
     });
 
+    // ── Slots 0..4 (visible when view = "toggle:<qn>" and indexMap[qn] = i)
+    transitionDuration_0 = new formattingSettings.NumUpDown   ({ name: "transitionDuration_0", displayName: "Transition Duration (ms)", value: 350 });
+    transitionEase_0     = new formattingSettings.ItemDropdown({ name: "transitionEase_0",     displayName: "Transition Easing",        value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" }, items: TRANSITION_EASE_ITEMS });
+    shimmerEnabled_0     = new formattingSettings.ToggleSwitch({ name: "shimmerEnabled_0",     displayName: "Track Shimmer",            value: false });
+    shimmerMode_0        = new formattingSettings.ItemDropdown({ name: "shimmerMode_0",        displayName: "Shimmer Mode",             value: { value: "perValue", displayName: "Per Value" }, items: SHIMMER_MODE_ITEMS });
+    shimmerColor_0       = new formattingSettings.ColorPicker ({ name: "shimmerColor_0",       displayName: "Shimmer Color",            value: { value: "#FFFFFF" }, instanceKind: FX, selector: FX_SELECTOR });
+    shimmerDuration_0    = new formattingSettings.NumUpDown   ({ name: "shimmerDuration_0",    displayName: "Shimmer Duration (ms)",    value: 2500 });
+    shimmerOpacity_0     = new formattingSettings.NumUpDown   ({ name: "shimmerOpacity_0",     displayName: "Shimmer Transparency (%)", value: 100 });
+
+    transitionDuration_1 = new formattingSettings.NumUpDown   ({ name: "transitionDuration_1", displayName: "Transition Duration (ms)", value: 350 });
+    transitionEase_1     = new formattingSettings.ItemDropdown({ name: "transitionEase_1",     displayName: "Transition Easing",        value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" }, items: TRANSITION_EASE_ITEMS });
+    shimmerEnabled_1     = new formattingSettings.ToggleSwitch({ name: "shimmerEnabled_1",     displayName: "Track Shimmer",            value: false });
+    shimmerMode_1        = new formattingSettings.ItemDropdown({ name: "shimmerMode_1",        displayName: "Shimmer Mode",             value: { value: "perValue", displayName: "Per Value" }, items: SHIMMER_MODE_ITEMS });
+    shimmerColor_1       = new formattingSettings.ColorPicker ({ name: "shimmerColor_1",       displayName: "Shimmer Color",            value: { value: "#FFFFFF" }, instanceKind: FX, selector: FX_SELECTOR });
+    shimmerDuration_1    = new formattingSettings.NumUpDown   ({ name: "shimmerDuration_1",    displayName: "Shimmer Duration (ms)",    value: 2500 });
+    shimmerOpacity_1     = new formattingSettings.NumUpDown   ({ name: "shimmerOpacity_1",     displayName: "Shimmer Transparency (%)", value: 100 });
+
+    transitionDuration_2 = new formattingSettings.NumUpDown   ({ name: "transitionDuration_2", displayName: "Transition Duration (ms)", value: 350 });
+    transitionEase_2     = new formattingSettings.ItemDropdown({ name: "transitionEase_2",     displayName: "Transition Easing",        value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" }, items: TRANSITION_EASE_ITEMS });
+    shimmerEnabled_2     = new formattingSettings.ToggleSwitch({ name: "shimmerEnabled_2",     displayName: "Track Shimmer",            value: false });
+    shimmerMode_2        = new formattingSettings.ItemDropdown({ name: "shimmerMode_2",        displayName: "Shimmer Mode",             value: { value: "perValue", displayName: "Per Value" }, items: SHIMMER_MODE_ITEMS });
+    shimmerColor_2       = new formattingSettings.ColorPicker ({ name: "shimmerColor_2",       displayName: "Shimmer Color",            value: { value: "#FFFFFF" }, instanceKind: FX, selector: FX_SELECTOR });
+    shimmerDuration_2    = new formattingSettings.NumUpDown   ({ name: "shimmerDuration_2",    displayName: "Shimmer Duration (ms)",    value: 2500 });
+    shimmerOpacity_2     = new formattingSettings.NumUpDown   ({ name: "shimmerOpacity_2",     displayName: "Shimmer Transparency (%)", value: 100 });
+
+    transitionDuration_3 = new formattingSettings.NumUpDown   ({ name: "transitionDuration_3", displayName: "Transition Duration (ms)", value: 350 });
+    transitionEase_3     = new formattingSettings.ItemDropdown({ name: "transitionEase_3",     displayName: "Transition Easing",        value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" }, items: TRANSITION_EASE_ITEMS });
+    shimmerEnabled_3     = new formattingSettings.ToggleSwitch({ name: "shimmerEnabled_3",     displayName: "Track Shimmer",            value: false });
+    shimmerMode_3        = new formattingSettings.ItemDropdown({ name: "shimmerMode_3",        displayName: "Shimmer Mode",             value: { value: "perValue", displayName: "Per Value" }, items: SHIMMER_MODE_ITEMS });
+    shimmerColor_3       = new formattingSettings.ColorPicker ({ name: "shimmerColor_3",       displayName: "Shimmer Color",            value: { value: "#FFFFFF" }, instanceKind: FX, selector: FX_SELECTOR });
+    shimmerDuration_3    = new formattingSettings.NumUpDown   ({ name: "shimmerDuration_3",    displayName: "Shimmer Duration (ms)",    value: 2500 });
+    shimmerOpacity_3     = new formattingSettings.NumUpDown   ({ name: "shimmerOpacity_3",     displayName: "Shimmer Transparency (%)", value: 100 });
+
+    transitionDuration_4 = new formattingSettings.NumUpDown   ({ name: "transitionDuration_4", displayName: "Transition Duration (ms)", value: 350 });
+    transitionEase_4     = new formattingSettings.ItemDropdown({ name: "transitionEase_4",     displayName: "Transition Easing",        value: { value: "cubic-bezier(.22,.61,.36,1)", displayName: "Smooth (default)" }, items: TRANSITION_EASE_ITEMS });
+    shimmerEnabled_4     = new formattingSettings.ToggleSwitch({ name: "shimmerEnabled_4",     displayName: "Track Shimmer",            value: false });
+    shimmerMode_4        = new formattingSettings.ItemDropdown({ name: "shimmerMode_4",        displayName: "Shimmer Mode",             value: { value: "perValue", displayName: "Per Value" }, items: SHIMMER_MODE_ITEMS });
+    shimmerColor_4       = new formattingSettings.ColorPicker ({ name: "shimmerColor_4",       displayName: "Shimmer Color",            value: { value: "#FFFFFF" }, instanceKind: FX, selector: FX_SELECTOR });
+    shimmerDuration_4    = new formattingSettings.NumUpDown   ({ name: "shimmerDuration_4",    displayName: "Shimmer Duration (ms)",    value: 2500 });
+    shimmerOpacity_4     = new formattingSettings.NumUpDown   ({ name: "shimmerOpacity_4",     displayName: "Shimmer Transparency (%)", value: 100 });
+
     name: string = "animation";
     displayName: string = "Animation";
     slices: formattingSettings.Slice[] = [
+        this.view, this.animationIndexMap,
         this.transitionDuration, this.transitionEase,
-        this.shimmerEnabled, this.shimmerMode, this.shimmerColor, this.shimmerDuration, this.shimmerOpacity
+        this.shimmerEnabled, this.shimmerMode, this.shimmerColor, this.shimmerDuration, this.shimmerOpacity,
+        this.transitionDuration_0, this.transitionEase_0, this.shimmerEnabled_0, this.shimmerMode_0, this.shimmerColor_0, this.shimmerDuration_0, this.shimmerOpacity_0,
+        this.transitionDuration_1, this.transitionEase_1, this.shimmerEnabled_1, this.shimmerMode_1, this.shimmerColor_1, this.shimmerDuration_1, this.shimmerOpacity_1,
+        this.transitionDuration_2, this.transitionEase_2, this.shimmerEnabled_2, this.shimmerMode_2, this.shimmerColor_2, this.shimmerDuration_2, this.shimmerOpacity_2,
+        this.transitionDuration_3, this.transitionEase_3, this.shimmerEnabled_3, this.shimmerMode_3, this.shimmerColor_3, this.shimmerDuration_3, this.shimmerOpacity_3,
+        this.transitionDuration_4, this.transitionEase_4, this.shimmerEnabled_4, this.shimmerMode_4, this.shimmerColor_4, this.shimmerDuration_4, this.shimmerOpacity_4
     ];
 }
 

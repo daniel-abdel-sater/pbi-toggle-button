@@ -113,3 +113,46 @@ pbiviz.json          — API 5.11.0
 **Diagnostic added permanently:** `cat.objects` per-row dump in `update()`, `MASK rowsKept/skipped/distinct` per parseToggle, `upstreamChanged` flag, `renderKey CHANGED|unchanged`, `applyJsonFilter OK|THREW`, `value=<v><type>` in `buildBasicFilter`. These let us localize within a few log lines whether a regression is in (a) data shape, (b) cascade mask, (c) cache decision, (d) renderKey diff, (e) filter type, or (f) host filter rejection.
 
 ---
+
+
+### Cache-fallback over-preserved cached items when an external visual cross-filtered (single-toggle, no cascade)
+[retry-lesson] [date: 2026-04-29]
+
+**Context:** User clicks a marker on a separate Map visual on the page. The map publishes a filter that reduces the toggle's distinct values from 17 countries to 2 (Egypt + Kenya). Native PBI slicers do this automatically.
+
+**Symptom:** toggle keeps showing all 17 countries. Diagnostic logs (added on demand) showed:
+```
+cat[0] qn=sitessource.Country len=2 sample=[Egypt, Kenya]    ← PBI reduced correctly
+parseToggle MASK rowsKept=2 distinct.n=2                      ← parser saw 2
+CACHE-FALLBACK n=2 < cache=17 (upstream unchanged)            ← THE BUG
+  → keep cached items
+```
+PBI's filter propagation worked; our parser worked; the cache-fallback overrode the new dataView with previously-cached 17 items.
+
+**Root cause:** the cache-fallback (added per parent §P32 to handle multi-toggle cascade transient pruning) used the rule "fire if `n < cache.length` AND `upstreamChanged === false`". That:
+- ✅ correctly preserves UI in cascade off-by-one transitions (Year/Month/Day brief PBI artifact)
+- ❌ wrongly preserves UI when an external visual genuinely reduces the dataView and there's no upstream cascade to flag the change. Single-toggle visuals ALWAYS have `upstreamChanged === false`, so every external filter is misread as "transient PBI artifact".
+
+The §P32 cascade-input gate is necessary but not sufficient — it only knows about INTERNAL inputs (other toggles). External cross-filters change the dataView without touching any internal input.
+
+**Attempts that didn't fix it (in order):**
+1. **Blank-value filter** (skip null/empty field values) — filtered correctly but cached items still won.
+2. **Removed auto-snap on cascade-reset** — addressed a different bug (auto-selection on filter), didn't touch cache.
+3. **Highlight-aware row mask** — added `dv.categorical.values[i].highlights[r]` honoring; helps for highlight-mode cross-filter, but log proved this scenario was filter-mode (no measures bound, no `highlights` array), so mask never activated.
+4. **Final fix: narrow the cache-fallback** — only fires when `togIdx > 0` AND `n === cachedItems.length - 1` (off-by-one cascade transition). Anything else respects the dataView PBI sent.
+
+**Solution:**
+```typescript
+const hasUpstream = togIdx > 0;
+if (hasUpstream && !upstreamChanged && n === tog.cachedItems.length - 1 && tog.cachedItems.length >= 2) {
+    tog.items = tog.cachedItems;
+    return { ok: true, distinctCount: n };
+}
+// else: rebuild from current distinct (respects external filter)
+```
+
+**Generalized to parent CLAUDE.md** as a §P32 refinement — a cache-fallback that "preserves more-complete state when current looks smaller" needs a SPECIFIC, NARROW condition for when it fires. Broad conditions like "current < cached AND no internal input changed" catch external-filter shrinkage too.
+
+**Diagnostic value:** the comprehensive update() log (`cat[i] len=N`, `HIGHLIGHTS present/NONE`, `general.filter` state) instantly localized the bug to the cache layer. Without it we'd have chased filter format, highlight mode, etc. Keep the logs; gate via `TB_DEBUG` for release.
+
+---

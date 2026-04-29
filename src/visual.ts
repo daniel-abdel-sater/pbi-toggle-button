@@ -113,11 +113,11 @@ export class Visual implements IVisual {
     private currentDv: DataView | undefined;
     // <cardName, <queryName, slotIdx>> — populated from `<card>.<card>IndexMap` in metadata; used
     // to resolve per-toggle slot reads. Stays stable across rebindings.
-    private cardIndexMaps: Record<string, Record<string, number>> = { title: {}, content: {}, text: {}, thumb: {}, selection: {}, spacing: {} };
+    private cardIndexMaps: Record<string, Record<string, number>> = { title: {}, content: {}, text: {}, thumb: {}, selection: {}, spacing: {}, animation: {} };
     // <cardName, "all" | "toggle:<queryName>"> — read from metadata directly per §11.0c.
-    private activeViewByCard: Record<string, string> = { title: "all", content: "all", text: "all", thumb: "all", selection: "all", spacing: "all" };
+    private activeViewByCard: Record<string, string> = { title: "all", content: "all", text: "all", thumb: "all", selection: "all", spacing: "all", animation: "all" };
     // Cards that have the Apply-to dropdown wired (grow this list as B2/C1/C2 land)
-    private static readonly PER_TOGGLE_CARDS: ReadonlyArray<"title"|"content"|"text"|"thumb"|"selection"|"spacing"> = ["title", "content", "text", "thumb", "selection", "spacing"];
+    private static readonly PER_TOGGLE_CARDS: ReadonlyArray<"title"|"content"|"text"|"thumb"|"selection"|"spacing"|"animation"> = ["title", "content", "text", "thumb", "selection", "spacing", "animation"];
 
     private log(...args: unknown[]): void {
         if (!TB_DEBUG) return;
@@ -173,8 +173,29 @@ export class Visual implements IVisual {
                     const arr = v.values || [];
                     const sample = arr.slice(0, 6).map(x => x == null ? "(blank)" : `${x}<${typeof x}>`);
                     this.log(`    val[${i}] qn=${v.source?.queryName} roles=${JSON.stringify(v.source?.roles || {})} len=${arr.length} sample=[${sample.join(", ")}]`);
+                    // ── Cross-filter / highlight detection ──────────────────────
+                    // PBI uses two cross-filter mechanisms:
+                    //   FILTER mode  → cat.values[r] is REDUCED to only matching rows;
+                    //                  highlights array is undefined.
+                    //   HIGHLIGHT mode → cat.values[r] is FULL; values[i].highlights[r]
+                    //                    is non-null only for rows matching the source
+                    //                    visual's selection. (Slicers use this when
+                    //                    selecting from charts/maps.)
+                    // We need to honor BOTH to behave like a native slicer.
+                    const hl = (v as unknown as { highlights?: unknown[] }).highlights;
+                    if (hl && Array.isArray(hl)) {
+                        let hlCount = 0;
+                        for (const h of hl) if (h != null) hlCount++;
+                        const hlSample = hl.slice(0, 12).map(h => h == null ? "_" : "X").join("");
+                        this.log(`    val[${i}] HIGHLIGHTS present: ${hlCount}/${hl.length} non-null  pattern[0..11]=[${hlSample}]`);
+                    } else {
+                        this.log(`    val[${i}] highlights: NONE (filter-mode or no cross-filter)`);
+                    }
                 });
             }
+            // ── Diagnostic: general.filter state (set by THIS visual via applyJsonFilter) ──
+            const generalFilter = (dv?.metadata?.objects as { general?: { filter?: unknown } } | undefined)?.general?.filter;
+            this.log(`  general.filter: ${generalFilter ? JSON.stringify(generalFilter).slice(0, 300) : "absent"}`);
 
             if (settingsDv) {
                 this.fmtSettings = this.fmtService.populateFormattingSettingsModel(
@@ -373,7 +394,7 @@ export class Visual implements IVisual {
     // ── Apply-to plumbing ──────────────────────────────────────────────
 
     /** Read the card's indexMap from metadata, assign slots to any new queryNames, persist if changed. */
-    private ensureSlotsForCard(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
+    private ensureSlotsForCard(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"|"animation"): void {
         const propName = `${cardName}IndexMap`;
         const raw = this.currentDvMeta?.[cardName]?.[propName];
         let map: Record<string, number> = {};
@@ -413,7 +434,7 @@ export class Visual implements IVisual {
 
     /** Rebuild the card's `view` ItemDropdown items list from current bound toggles, and direct-read
      *  the active view from metadata (§11.0c — text-typed dynamic dropdown). */
-    private refreshViewItemsAndRead(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
+    private refreshViewItemsAndRead(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"|"animation"): void {
         const items: Array<{ value: string; displayName: string }> = [
             { value: "all", displayName: "All toggles" }
         ];
@@ -433,7 +454,7 @@ export class Visual implements IVisual {
         }
     }
 
-    private applyCardVisibility(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"): void {
+    private applyCardVisibility(cardName: "title"|"content"|"text"|"thumb"|"selection"|"spacing"|"animation"): void {
         const view = this.activeViewByCard[cardName] || "all";
         const isAll = view === "all" || !view.startsWith("toggle:");
         const qn = isAll ? "" : view.slice("toggle:".length);
@@ -446,11 +467,12 @@ export class Visual implements IVisual {
             text:      ["labelActiveColor", "labelInactiveColor", "symbolActiveColor", "symbolInactiveColor", "symbolInactiveAlpha"],
             thumb:     ["thumbGlowColor", "thumbRingAlpha", "thumbBloomAlpha", "thumbGlowSpread", "thumbHighlightAlpha"],
             selection: ["forceSelection", "multiSelect"],
-            spacing:   ["valueGap"]
+            spacing:   ["valueGap"],
+            animation: ["transitionDuration", "transitionEase", "shimmerEnabled", "shimmerMode", "shimmerColor", "shimmerDuration", "shimmerOpacity"]
         };
         const indexMapProps: Record<string, string> = {
             title: "titleIndexMap", content: "contentIndexMap", text: "textIndexMap", thumb: "thumbIndexMap",
-            selection: "selectionIndexMap", spacing: "spacingIndexMap"
+            selection: "selectionIndexMap", spacing: "spacingIndexMap", animation: "animationIndexMap"
         };
 
         const card = (this.fmtSettings as unknown as Record<string, Record<string, formattingSettings.Slice>>)[cardName];
@@ -662,11 +684,53 @@ export class Visual implements IVisual {
         // whether the cache fallback is safe (preserve N buttons on transient shrinkage)
         // or whether we must rebuild (the cascade legitimately points at a different
         // upstream value with a different valid distinct set).
-        const upstreamKey = constraints.slice(0, togIdx)
+        // Build the upstream signature. Includes highlight-mask digest so an
+        // external visual's click (which doesn't change our toggle's own
+        // selection but DOES change which rows are highlighted) is detected
+        // and forces the cache-fallback to re-evaluate.
+        let upstreamKey = constraints.slice(0, togIdx)
             .map(v => v ? v.slice().sort().join("|") : "").join("␟");
+
+        // ── External-cross-filter highlights (slicer-style row mask) ─────
+        // When another visual on the page cross-filters via highlight mode
+        // (e.g., a map marker click), PBI sends our cat.values[] in FULL but
+        // populates dv.categorical.values[i].highlights[r] non-null only for
+        // the rows that pass the source visual's filter. Native slicers honor
+        // this — they show only the highlighted distinct values. We do the
+        // same here: build a row-level mask from the highlights arrays of all
+        // bound value columns, OR'd together (a row is "in" if ANY value
+        // column highlights it).
+        //   • If NO value column has highlights → mask is null → show all rows.
+        //   • If at least one value column has highlights → mask is a Set of
+        //     row indices to keep.
+        // Filter-mode cross-filter is not affected (cat.values is already
+        // reduced; highlights are absent).
+        const dvVals = (this.currentDv?.categorical?.values as unknown as Array<{ highlights?: unknown[] }> | undefined) || [];
+        let hlMask: Set<number> | null = null;
+        let hlSourceCount = 0;
+        for (const vc of dvVals) {
+            const hl = vc?.highlights;
+            if (!hl || !Array.isArray(hl)) continue;
+            hlSourceCount++;
+            if (!hlMask) hlMask = new Set<number>();
+            for (let r = 0; r < hl.length; r++) {
+                if (hl[r] != null) hlMask.add(r);
+            }
+        }
+        if (hlMask) {
+            this.log(`  parseToggle(${tog.queryName}) HIGHLIGHT mask: ${hlMask.size}/${values.length} rows kept (across ${hlSourceCount} value columns)`);
+            // Mix the mask into the upstreamKey: digest = "hl:size:firstIdx:lastIdx".
+            // Two different highlight patterns of the same size would still produce
+            // the same digest if their first+last match, but for ALL realistic
+            // selection patterns this is unique enough to bust the cache fallback.
+            const arr = Array.from(hlMask).sort((a, b) => a - b);
+            const digest = `hl:${arr.length}:${arr[0] ?? -1}:${arr[arr.length - 1] ?? -1}`;
+            upstreamKey += "␟" + digest;
+        }
         const upstreamChanged = upstreamKey !== tog.lastUpstreamKey;
         tog.lastUpstreamKey = upstreamKey;
-        this.log(`  parseToggle(${tog.queryName}) ENTRY cat.len=${values.length} upstream=[${upstreamConstraints}] upstreamChanged=${upstreamChanged} selectedValue=${tog.selectedValue} selectedSet={${Array.from(tog.selectedSet).join(",")}}`);
+        this.log(`  parseToggle(${tog.queryName}) ENTRY cat.len=${values.length} upstream=[${upstreamConstraints}] upstreamChanged=${upstreamChanged} hlMask=${hlMask ? hlMask.size : "none"} selectedValue=${tog.selectedValue} selectedSet={${Array.from(tog.selectedSet).join(",")}}`);
+
         // Pre-compute Set<string> per upstream constraint so the per-row mask check is O(1)
         const upstreamSets: (Set<string> | null)[] = constraints.slice(0, togIdx).map(arr =>
             arr && arr.length > 0 ? new Set(arr) : null
@@ -676,6 +740,10 @@ export class Visual implements IVisual {
         let rowsKept = 0;
         let rowsSkipped = 0;
         for (let r = 0; r < values.length; r++) {
+            // External cross-filter (highlight mode): drop rows the source
+            // visual didn't highlight.
+            if (hlMask && !hlMask.has(r)) { rowsSkipped++; continue; }
+
             // Slicer cascade: row must satisfy every upstream toggle's selection
             // (multi-select = OR-match against any value in the upstream's set).
             let matches = true;
@@ -718,21 +786,19 @@ export class Visual implements IVisual {
         const distinctTrace = distinct.map(d => `${d.raw == null ? "(blank)" : String(d.raw)}<${typeof d.raw}>@${d.idx}`).join(", ");
         this.log(`  parseToggle(${tog.queryName}) MASK rowsKept=${rowsKept} rowsSkipped=${rowsSkipped} distinct.n=${n} [${distinctTrace}]`);
 
-        // Cache fallback: cat shrunk transiently (cross-filter, BLANK measure pruning).
-        // If cache holds more buttons than the current data shows AND the upstream
-        // cascade input is UNCHANGED, preserve cached UI structure (the shrinkage is
-        // a PBI artifact, not an intentional change). When upstream changed, this
-        // toggle's available items legitimately depend on the new upstream value —
-        // we MUST rebuild (e.g. Dec=31 → Feb=28 needs 28 buttons, not 31).
-        if (!upstreamChanged && n >= 1 && n < tog.cachedItems.length && tog.cachedItems.length >= 2) {
-            this.log(`  parseToggle(${tog.queryName}) CACHE-FALLBACK n=${n} < cache=${tog.cachedItems.length} (upstream unchanged) → keep cached items, selectedValue=${tog.selectedValue}`);
+        // Cache fallback (NARROWED): only fires for an UPSTREAM-CASCADE pass-through
+        // that lost ONE item (off-by-one PBI artifact during transitional updates).
+        // The original behavior — fire whenever n < cache.length & upstream unchanged
+        // — over-preserved cached buttons when an EXTERNAL visual cross-filtered our
+        // dataView (PBI legitimately reduces cat.values; we must respect that). With
+        // single-toggle visuals (no cascade) the fallback fired on every external
+        // filter and showed stale buttons. Now we only preserve cache for the very
+        // specific cascade-transition off-by-one case (togIdx > 0 = downstream
+        // toggle, n exactly cache.length - 1).
+        const hasUpstream = togIdx > 0;
+        if (hasUpstream && !upstreamChanged && n === tog.cachedItems.length - 1 && tog.cachedItems.length >= 2) {
+            this.log(`  parseToggle(${tog.queryName}) CACHE-FALLBACK (off-by-one cascade) n=${n} cache=${tog.cachedItems.length} → keep cached items`);
             tog.items = tog.cachedItems;
-            // Note: when the cache fallback fires with n=1 (PBI transiently
-            // shrunk to a single value), we used to auto-select that value.
-            // Removed — auto-selecting on shrinkage was the same wrong UX as
-            // cascade-reset auto-snap. The user's existing selection is preserved
-            // (cache items still hold all buttons; whichever was selected stays
-            // selected, even if currently not in `distinct`).
             return { ok: true, distinctCount: n };
         }
 
@@ -1733,6 +1799,12 @@ export class Visual implements IVisual {
         const sizeMode = (s.sizing.sizeMode.value as { value?: string })?.value || "fixed";
         const isFit = sizeMode === "auto";
         this.root.classList.toggle("tb-fit", isFit);
+        // Equal-Width Buttons (Sizing card). When ON, every button shares the
+        // toggle width equally regardless of label length. CSS-only: the
+        // .tb-equal-width class forces the toggle to width:100% and applies
+        // flex:1 1 0 on the buttons. No-op in Fit mode (already equal-share).
+        const equalWidth = s.sizing.equalWidth.value === true;
+        this.root.classList.toggle("tb-equal-width", equalWidth);
 
         s.sizing.size.visible        = !isFit;
 
@@ -1755,16 +1827,42 @@ export class Visual implements IVisual {
         // gets justify-content, cross axis gets align-items. "Stretch" (default) on the
         // cross axis keeps the equal-size behavior; non-stretch values use natural sizing.
         if (this.togglesWrapEl) {
+            // Helper to apply main-axis "stretch" by setting flex:1 on each block
+            // (justify-content has no real "stretch" value — falls back to
+            // flex-start, which leaves blocks at natural size with empty space
+            // at the end). flex:1 on children grows them to fill.
+            const applyMainStretch = (mainStretch: boolean): void => {
+                if (!this.togglesWrapEl) return;
+                const blocks = this.togglesWrapEl.querySelectorAll<HTMLDivElement>(".tb-block");
+                blocks.forEach(b => {
+                    if (mainStretch) {
+                        b.style.flex = "1 1 0";
+                        b.style.minWidth = "0";
+                        b.style.minHeight = "0";
+                    } else {
+                        b.style.flex = "";
+                        b.style.minWidth = "";
+                        b.style.minHeight = "";
+                    }
+                });
+            };
+
             if (isFit) {
-                this.togglesWrapEl.style.justifyContent = effectiveOrient === "vertical" ? "center" : "stretch";
+                this.togglesWrapEl.style.justifyContent = effectiveOrient === "vertical" ? "center" : "flex-start";
                 this.togglesWrapEl.style.alignItems = "stretch";
+                applyMainStretch(true); // fit always stretches main axis (blocks fill the wrap)
             } else {
                 const v = (s.orientation.verticalAlign.value   as { value?: string })?.value || "stretch";
                 const h = (s.orientation.horizontalAlign.value as { value?: string })?.value || "stretch";
                 const mapY: Record<string, string> = { stretch: "stretch", top:  "flex-start", center: "center", bottom: "flex-end" };
                 const mapX: Record<string, string> = { stretch: "stretch", left: "flex-start", center: "center", right:  "flex-end" };
-                // justify-content has no "stretch" value; treat it as flex-start (toggles
-                // stack from the start, equal-size still comes from the cross-axis side).
+                // justify-content has no "stretch" value; we handle that case by
+                // applying flex:1 to each block (mainStretch path) so blocks
+                // grow to fill the main axis. Otherwise blocks stay natural-size
+                // and justify-content positions them.
+                const mainVal = effectiveOrient === "vertical" ? v : h;
+                const mainStretch = mainVal === "stretch";
+                applyMainStretch(mainStretch);
                 const mainFromVal = (val: string, m: Record<string, string>): string => {
                     const out = m[val];
                     return (!out || out === "stretch") ? "flex-start" : out;
@@ -1928,52 +2026,73 @@ export class Visual implements IVisual {
         const fieldGap = Math.max(0, Math.min(200, Number(s.spacing.fieldGap.value) || 0));
         root.style.setProperty("--tb-field-gap", fieldGap + "px");
 
-        // ── Animation
-        const dur = Math.max(0, Math.min(5000, Number(s.animation.transitionDuration.value) || 350));
-        root.style.setProperty("--transition-duration", dur + "ms");
-        const ease = (s.animation.transitionEase.value as { value?: string })?.value || "cubic-bezier(.22,.61,.36,1)";
-        root.style.setProperty("--transition-ease", ease);
+        // ── Animation (PER-TOGGLE) ──────────────────────────────────
+        // Each block resolves its own transition + shimmer settings via the
+        // standard Apply-to chain: per-toggle slot override → "all" default →
+        // hardcoded fallback. Classes (.tb-shimmer / .tb-shimmer-wave /
+        // .tb-shimmer-per-value) and CSS variables (--transition-duration,
+        // --transition-ease, --tb-shimmer-rgb, --tb-shimmer-dur,
+        // --tb-shimmer-opacity, --tb-shimmer-track-gradient) are set on the
+        // .tb-block element, so descendants (.tb-toggle, track, buttons)
+        // inherit per-block values.
+        for (const t of this.toggles) {
+            if (!t.blockEl) continue;
+            const blk = t.blockEl as HTMLDivElement;
 
-        // ── Shimmer (global): horizontally-sweeping highlight band on .tb-toggle::after.
-        // Tinted by the Animation Color picker, composited with mix-blend-mode: screen so
-        // it lights up whatever fill is underneath (track + thumb + active button).
-        const shimmerOn = s.animation.shimmerEnabled.value === true;
-        const shimmerMode = (s.animation.shimmerMode.value as { value?: string })?.value || "perValue";
-        this.root.classList.toggle("tb-shimmer", shimmerOn);
-        this.root.classList.toggle("tb-shimmer-wave", shimmerOn && shimmerMode === "wave");
-        this.root.classList.toggle("tb-shimmer-per-value", shimmerOn && shimmerMode !== "wave");
-        if (shimmerOn) {
-            const shimmerHex = clr(s.animation.shimmerColor as formattingSettings.ColorPicker, "#FFFFFF");
-            root.style.setProperty("--tb-shimmer-rgb", hexToRgbTriplet(shimmerHex, "255, 255, 255"));
-            const shimmerDur = Math.max(200, Math.min(20000, Number(s.animation.shimmerDuration.value) || 2500));
-            root.style.setProperty("--tb-shimmer-dur", shimmerDur + "ms");
-            const shimmerOpacityPct = Math.max(0, Math.min(100, Number(s.animation.shimmerOpacity.value) || 0));
-            root.style.setProperty("--tb-shimmer-opacity", String(shimmerOpacityPct / 100));
+            // Transition timing (thumb slide)
+            const dur = Math.max(0, Math.min(5000, this.resolveNum("animation", "transitionDuration", t.queryName, 350)));
+            blk.style.setProperty("--transition-duration", dur + "ms");
+            const ease = this.resolveDropdown("animation", "transitionEase", t.queryName, "cubic-bezier(.22,.61,.36,1)");
+            blk.style.setProperty("--transition-ease", ease);
 
-            // Wave mode: build a stationary multi-stop gradient per toggle where each
-            // button occupies its own slice of the track (sharp transitions at button
-            // boundaries). The CSS-side mask sweeps a single highlight peak across,
-            // revealing the underlying gradient at the band's current x-position — so
-            // the band's visible color is the button it's currently over. Buttons are
-            // flex:1 (equal width) so positions are 100/N % per slice.
-            if (shimmerMode === "wave") {
-                for (const t of this.toggles) {
-                    if (!t.toggleEl || t.items.length === 0) continue;
-                    const N = t.items.length;
-                    const fallbackHex = clr(s.animation.shimmerColor as formattingSettings.ColorPicker, "#FFFFFF");
-                    const stops: string[] = [];
-                    for (let i = 0; i < N; i++) {
-                        const item = t.items[i];
-                        const hex = this.colorForRow(t, item.rowIdx, "animation", "shimmerColor", fallbackHex);
-                        const startPct = (i * 100 / N).toFixed(4);
-                        const endPct   = ((i + 1) * 100 / N).toFixed(4);
-                        stops.push(`${hex} ${startPct}%`, `${hex} ${endPct}%`);
+            // Shimmer per-toggle
+            const shimmerOn = this.resolveBool("animation", "shimmerEnabled", t.queryName, false);
+            const shimmerMode = this.resolveDropdown("animation", "shimmerMode", t.queryName, "perValue");
+            blk.classList.toggle("tb-shimmer", shimmerOn);
+            blk.classList.toggle("tb-shimmer-wave", shimmerOn && shimmerMode === "wave");
+            blk.classList.toggle("tb-shimmer-per-value", shimmerOn && shimmerMode !== "wave");
+
+            if (shimmerOn) {
+                const shimmerHex = this.resolveColor("animation", "shimmerColor", t.queryName, "#FFFFFF");
+                blk.style.setProperty("--tb-shimmer-rgb", hexToRgbTriplet(shimmerHex, "255, 255, 255"));
+                const shimmerDur = Math.max(200, Math.min(20000, this.resolveNum("animation", "shimmerDuration", t.queryName, 2500)));
+                blk.style.setProperty("--tb-shimmer-dur", shimmerDur + "ms");
+                const shimmerOpacityPct = Math.max(0, Math.min(100, this.resolveNum("animation", "shimmerOpacity", t.queryName, 100)));
+                blk.style.setProperty("--tb-shimmer-opacity", String(shimmerOpacityPct / 100));
+
+                // Wave mode — build the multi-stop gradient FROM ACTUAL button
+                // positions (offsetLeft/offsetWidth) so color stops align with
+                // each button's real edges (sharp transitions, no color leak).
+                // Per-row FX color via colorForRow → slot variant first, then
+                // unprefixed, then resolveColor fallback.
+                if (shimmerMode === "wave" && t.toggleEl && t.trackEl && t.items.length > 0) {
+                    const fallbackHex = shimmerHex;
+                    const padPx = parseFloat(getComputedStyle(t.trackEl).getPropertyValue("--toggle-padding")) || 0;
+                    const last = t.btnEls[t.btnEls.length - 1];
+                    if (last) {
+                        const W = last.offsetLeft + last.offsetWidth - padPx;
+                        if (W > 0) {
+                            const stops: string[] = [];
+                            for (let i = 0; i < t.btnEls.length; i++) {
+                                const btn = t.btnEls[i];
+                                const item = t.items[i];
+                                if (!btn || !item) continue;
+                                const hex = this.colorForRow(t, item.rowIdx, "animation", "shimmerColor", fallbackHex);
+                                const start = ((btn.offsetLeft - padPx) / W) * 100;
+                                const end   = ((btn.offsetLeft - padPx + btn.offsetWidth) / W) * 100;
+                                stops.push(`${hex} ${start.toFixed(4)}%`, `${hex} ${end.toFixed(4)}%`);
+                            }
+                            const grad = `linear-gradient(90deg, ${stops.join(", ")})`;
+                            t.toggleEl.style.setProperty("--tb-shimmer-track-gradient", grad);
+                        }
                     }
-                    const grad = `linear-gradient(90deg, ${stops.join(", ")})`;
-                    t.toggleEl.style.setProperty("--tb-shimmer-track-gradient", grad);
                 }
             }
         }
+        // Strip any legacy root-level shimmer classes/vars from prior renders
+        // (in case a previous build set them at root). The block-level ones
+        // are the canonical source now.
+        this.root.classList.remove("tb-shimmer", "tb-shimmer-wave", "tb-shimmer-per-value");
 
         // ── Sync active classes + reposition each thumb
         for (const t of this.toggles) {

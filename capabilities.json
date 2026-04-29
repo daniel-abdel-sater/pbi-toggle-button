@@ -76,8 +76,9 @@
     "sizing": {
       "displayName": "Sizing",
       "properties": {
-        "sizeMode":    { "displayName": "Size Mode",         "type": { "text": true } },
-        "size":        { "displayName": "Fixed Size (px)",   "type": { "numeric": true } }
+        "sizeMode":    { "displayName": "Size Mode",            "type": { "text": true } },
+        "size":        { "displayName": "Fixed Size (px)",      "type": { "numeric": true } },
+        "equalWidth":  { "displayName": "Equal-Width Buttons",  "type": { "bool": true } }
       }
     },
     "capsule": {
@@ -234,14 +235,56 @@
     "animation": {
       "displayName": "Animation",
       "properties": {
-        "transitionDuration": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
-        "transitionEase":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "view":               { "displayName": "Apply to",                  "type": { "text": true } },
+        "animationIndexMap":  { "displayName": "Slot Map (internal)",       "type": { "text": true } },
 
+        "transitionDuration": { "displayName": "Transition Duration (ms)",  "type": { "numeric": true } },
+        "transitionEase":     { "displayName": "Transition Easing",         "type": { "text": true } },
         "shimmerEnabled":     { "displayName": "Track Shimmer",             "type": { "bool": true } },
         "shimmerMode":        { "displayName": "Shimmer Mode",              "type": { "text": true } },
         "shimmerColor":       { "displayName": "Shimmer Color",             "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor", "selector": ["field"] } } },
         "shimmerDuration":    { "displayName": "Shimmer Duration (ms)",     "type": { "numeric": true } },
-        "shimmerOpacity":     { "displayName": "Shimmer Transparency (%)",  "type": { "numeric": true } }
+        "shimmerOpacity":     { "displayName": "Shimmer Transparency (%)",  "type": { "numeric": true } },
+
+        "transitionDuration_0": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase_0":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "shimmerEnabled_0":     { "displayName": "Track Shimmer",            "type": { "bool": true } },
+        "shimmerMode_0":        { "displayName": "Shimmer Mode",             "type": { "text": true } },
+        "shimmerColor_0":       { "displayName": "Shimmer Color",            "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor_0", "selector": ["field"] } } },
+        "shimmerDuration_0":    { "displayName": "Shimmer Duration (ms)",    "type": { "numeric": true } },
+        "shimmerOpacity_0":     { "displayName": "Shimmer Transparency (%)", "type": { "numeric": true } },
+
+        "transitionDuration_1": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase_1":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "shimmerEnabled_1":     { "displayName": "Track Shimmer",            "type": { "bool": true } },
+        "shimmerMode_1":        { "displayName": "Shimmer Mode",             "type": { "text": true } },
+        "shimmerColor_1":       { "displayName": "Shimmer Color",            "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor_1", "selector": ["field"] } } },
+        "shimmerDuration_1":    { "displayName": "Shimmer Duration (ms)",    "type": { "numeric": true } },
+        "shimmerOpacity_1":     { "displayName": "Shimmer Transparency (%)", "type": { "numeric": true } },
+
+        "transitionDuration_2": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase_2":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "shimmerEnabled_2":     { "displayName": "Track Shimmer",            "type": { "bool": true } },
+        "shimmerMode_2":        { "displayName": "Shimmer Mode",             "type": { "text": true } },
+        "shimmerColor_2":       { "displayName": "Shimmer Color",            "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor_2", "selector": ["field"] } } },
+        "shimmerDuration_2":    { "displayName": "Shimmer Duration (ms)",    "type": { "numeric": true } },
+        "shimmerOpacity_2":     { "displayName": "Shimmer Transparency (%)", "type": { "numeric": true } },
+
+        "transitionDuration_3": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase_3":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "shimmerEnabled_3":     { "displayName": "Track Shimmer",            "type": { "bool": true } },
+        "shimmerMode_3":        { "displayName": "Shimmer Mode",             "type": { "text": true } },
+        "shimmerColor_3":       { "displayName": "Shimmer Color",            "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor_3", "selector": ["field"] } } },
+        "shimmerDuration_3":    { "displayName": "Shimmer Duration (ms)",    "type": { "numeric": true } },
+        "shimmerOpacity_3":     { "displayName": "Shimmer Transparency (%)", "type": { "numeric": true } },
+
+        "transitionDuration_4": { "displayName": "Transition Duration (ms)", "type": { "numeric": true } },
+        "transitionEase_4":     { "displayName": "Transition Easing",        "type": { "text": true } },
+        "shimmerEnabled_4":     { "displayName": "Track Shimmer",            "type": { "bool": true } },
+        "shimmerMode_4":        { "displayName": "Shimmer Mode",             "type": { "text": true } },
+        "shimmerColor_4":       { "displayName": "Shimmer Color",            "type": { "fill": { "solid": { "color": true } } }, "rule": { "inputRole": "field", "output": { "property": "shimmerColor_4", "selector": ["field"] } } },
+        "shimmerDuration_4":    { "displayName": "Shimmer Duration (ms)",    "type": { "numeric": true } },
+        "shimmerOpacity_4":     { "displayName": "Shimmer Transparency (%)", "type": { "numeric": true } }
       }
     },
     "orientation": {
