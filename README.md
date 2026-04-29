@@ -135,10 +135,6 @@ npx pbiviz package
 # output: dist/toggleButtonDA2604241000A1B2.1.0.0.0.pbiviz
 ```
 
-## License
-
-MIT — see [LICENSE](LICENSE) (add a license file if you don't have one).
-
 ## Author
 
 Daniel Abdel Sater — [danielabdelsate@gmail.com](mailto:danielabdelsate@gmail.com)
