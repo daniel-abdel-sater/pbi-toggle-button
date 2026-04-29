@@ -132,17 +132,16 @@
     &.tb-orient-vertical .tb-toggle-track {
         width: 100%;
     }
-    &.tb-orient-vertical .tb-lbl,
-    &.tb-orient-vertical .tb-sym {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    &.tb-orient-vertical .tb-btn {
-        flex: 1;
-        justify-content: center;
-        min-width: 0;
-    }
+    /* Removed:
+       - `.tb-orient-vertical .tb-btn { flex: 1; min-width: 0 }`
+       - `.tb-orient-vertical .tb-lbl/.tb-sym { overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap }`
+       Both rules forced equal-share squishing + label truncation in vertical
+       orientation, which prevented natural-width buttons and made the inner
+       track unscrollable (drag never activated). Vertical now behaves like
+       horizontal: Fixed mode = natural width per button (track scrolls if
+       total > toggle width), Fit mode = equal share via `.tb-fit .tb-btn`,
+       Equal-Width toggle = explicit equal share. Labels show in full. */
     &.tb-orient-horizontal .tb-toggles-wrap {
         flex-direction: row;
         align-items: stretch;
@@ -330,6 +329,50 @@
                 mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
     }
 
+    /* ── Vertical Values Layout — track scrolls Y axis ─────────────
+       Triggered by the Orientation card's Values Layout = Vertical.
+       Track flips to flex-direction: column; overflow swaps Y/X; the buttons
+       become full-width rows. Edge-fade mask switches to a 180deg gradient
+       and reads has-overflow-t/b instead of has-overflow-l/r (set by JS). */
+    &.tb-values-vertical .tb-toggle-track {
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-width: none;
+        max-height: 100%;
+    }
+    &.tb-values-vertical .tb-toggle-track.has-overflow-t.has-overflow-b {
+        -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+    &.tb-values-vertical .tb-toggle-track.has-overflow-t:not(.has-overflow-b) {
+        -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+                mask-image: linear-gradient(180deg, transparent 0, #000 var(--tb-fade-w, 24px), #000 100%);
+    }
+    &.tb-values-vertical .tb-toggle-track:not(.has-overflow-t).has-overflow-b {
+        -webkit-mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+                mask-image: linear-gradient(180deg, #000 0, #000 calc(100% - var(--tb-fade-w, 24px)), transparent 100%);
+    }
+    /* In vertical-values mode, buttons stack and each takes full track width.
+       width:100% so labels left-align by default; justify-content stays. */
+    &.tb-values-vertical .tb-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Vertical-values + Vertical Alignment = Stretch.
+       Without this, the toggle (display: inline-flex with stacked buttons) has
+       natural height and the wrap centers it. With it, the toggle expands to
+       fill its block's height — same idea as horizontal-values + horizontalAlign
+       stretch but on the Y axis. The track inherits and any overflow scrolls. */
+    &.tb-values-vertical-stretch .tb-toggle {
+        height: 100%;
+    }
+    &.tb-values-vertical-stretch .tb-toggle-track {
+        height: 100%;
+        max-height: 100%;
+    }
+
     /* ── Sliding thumb (::before pseudo on .tb-toggle-track) ─────────
        Lives INSIDE the scroll track, so it scrolls with the buttons naturally
        when the user scrolls/drags. positionThumb writes --thumb-x as
@@ -359,6 +402,22 @@
         opacity: 0;
     }
     .tb-toggle-track.tb-ready::before { opacity: 1; }
+
+    /* Vertical-values: thumb slides on the Y axis. Width spans the track's
+       padding-box width; height comes from --thumb-h; transform translates Y.
+       Transition swaps to height (was width). */
+    &.tb-values-vertical .tb-toggle-track::before {
+        top: 0;
+        bottom: auto;
+        left: var(--toggle-padding);
+        right: var(--toggle-padding);
+        width: auto;
+        height: var(--thumb-h);
+        transform: translateY(var(--thumb-y));
+        transition:
+            transform var(--transition-duration) var(--transition-ease),
+            height    var(--transition-duration) var(--transition-ease);
+    }
 
     /* ── Per-button shimmer (::after pseudo on .tb-btn) ────────────
        Each button gets its own sweeping highlight band, tinted by ITS row's
@@ -439,6 +498,25 @@
     .tb-block.tb-shimmer-wave .tb-toggle::after {
         display: block;
         animation: tb-shimmer-mask-sweep var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
+    }
+
+    /* Vertical-values Wave: mask peak slides top→bottom (and back via alternate)
+       instead of left→right. Mask-image and mask-size flip axes. The COLOR
+       gradient (--tb-shimmer-track-gradient) is built with 180deg + offsetTop
+       in JS, matching this mask's axis. Per-Value mode is unaffected — its
+       per-button band is always horizontal regardless of values layout. */
+    &.tb-values-vertical .tb-toggle::after {
+        background-image: var(--tb-shimmer-track-gradient,
+            linear-gradient(180deg, rgba(var(--tb-shimmer-rgb, 255, 255, 255), 0.55), rgba(var(--tb-shimmer-rgb, 255, 255, 255), 0.55)));
+        -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 50%, transparent 100%);
+                mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.55) 50%, transparent 100%);
+        -webkit-mask-size: 100% 50%;
+                mask-size: 100% 50%;
+        -webkit-mask-position: 0 -200%;
+                mask-position: 0 -200%;
+    }
+    &.tb-values-vertical .tb-block.tb-shimmer-wave .tb-toggle::after {
+        animation: tb-shimmer-mask-sweep-y var(--tb-shimmer-dur, 2500ms) linear infinite alternate;
     }
 
     /* ── Buttons inside the track ────────────────────────────────── */
@@ -559,4 +637,11 @@
        highlight peak sweeps across, revealing each button's color in turn. */
     from { -webkit-mask-position: -200% 0; mask-position: -200% 0; }
     to   { -webkit-mask-position:  200% 0; mask-position:  200% 0; }
+}
+@keyframes tb-shimmer-mask-sweep-y {
+    /* Vertical-values Wave: same idea, Y axis. The mask peak slides top→bottom;
+       animation-direction: alternate flips for the return trip. Pairs with the
+       180deg color gradient + 100% 50% mask-size set in CSS. */
+    from { -webkit-mask-position: 0 -200%; mask-position: 0 -200%; }
+    to   { -webkit-mask-position: 0  200%; mask-position: 0  200%; }
 }

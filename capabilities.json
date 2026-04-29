@@ -290,9 +290,10 @@
     "orientation": {
       "displayName": "Orientation",
       "properties": {
-        "mode":            { "displayName": "Layout Direction",   "type": { "text": true } },
-        "verticalAlign":   { "displayName": "Vertical Alignment", "type": { "text": true } },
-        "horizontalAlign": { "displayName": "Horizontal Alignment", "type": { "text": true } }
+        "mode":            { "displayName": "Layout Direction",     "type": { "text": true } },
+        "verticalAlign":   { "displayName": "Vertical Alignment",   "type": { "text": true } },
+        "horizontalAlign": { "displayName": "Horizontal Alignment", "type": { "text": true } },
+        "valuesLayout":    { "displayName": "Values Layout",        "type": { "text": true } }
       }
     },
     "spacing": {

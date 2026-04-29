@@ -615,10 +615,19 @@ class OrientationCard extends FormattingSettingsCard {
             { value: "right",   displayName: "Right" }
         ]
     });
+    valuesLayout = new formattingSettings.ItemDropdown({
+        name: "valuesLayout", displayName: "Values Layout",
+        description: "How the values inside ONE toggle are arranged. Horizontal (default) places buttons side-by-side. Vertical stacks them top-to-bottom — useful for narrow visuals or list-style toggles. When Wave shimmer is on, the band's direction follows this layout (left↔right when horizontal, top↔bottom when vertical). Per-Value shimmer stays horizontal regardless.",
+        value: { value: "horizontal", displayName: "Horizontal" },
+        items: [
+            { value: "horizontal", displayName: "Horizontal" },
+            { value: "vertical",   displayName: "Vertical" }
+        ]
+    });
 
     name: string = "orientation";
     displayName: string = "Orientation";
-    slices: formattingSettings.Slice[] = [this.mode, this.verticalAlign, this.horizontalAlign];
+    slices: formattingSettings.Slice[] = [this.mode, this.verticalAlign, this.horizontalAlign, this.valuesLayout];
 }
 
 // ── Spacing ────────────────────────────────────────────────────────

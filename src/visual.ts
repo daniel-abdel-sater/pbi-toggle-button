@@ -219,6 +219,7 @@ export class Visual implements IVisual {
                 syncDropdown(this.fmtSettings.orientation.mode,            "orientation", "mode");
                 syncDropdown(this.fmtSettings.orientation.verticalAlign,   "orientation", "verticalAlign");
                 syncDropdown(this.fmtSettings.orientation.horizontalAlign, "orientation", "horizontalAlign");
+                syncDropdown(this.fmtSettings.orientation.valuesLayout,    "orientation", "valuesLayout");
 
                 // Cache metadata snapshot for resolve helpers
                 this.currentDvMeta = settingsDv.metadata?.objects as Record<string, Record<string, unknown> | undefined> | undefined;
@@ -1518,7 +1519,14 @@ export class Visual implements IVisual {
      *  each render rebuilds the track DOM, so listeners are fresh per render. */
     private attachTrackInteractions(tog: ToggleState): void {
         if (!tog.trackEl) return;
-        this.attachScrollInteractions(tog.trackEl, "x", `track[${tog.queryName}]`);
+        // Axis depends on the Values Layout setting. Horizontal (default): the
+        // track is a row of buttons that can scroll left/right. Vertical: the
+        // track is a column of buttons that can scroll top/bottom. Read directly
+        // from settings since this fires from renderToggleBlock (full DOM rebuild)
+        // and the orientation card is global.
+        const layout = (this.fmtSettings.orientation.valuesLayout.value as { value?: string })?.value || "horizontal";
+        const axis = layout === "vertical" ? "y" : "x";
+        this.attachScrollInteractions(tog.trackEl, axis, `track[${tog.queryName}]`);
     }
 
     /** Generic scroll-interaction wiring for any horizontally OR vertically
@@ -1658,14 +1666,24 @@ export class Visual implements IVisual {
     }
 
     /** Update edge-fade classes for a single toggle's track. Called from the
-     *  toggle's ResizeObserver and post-render rAF. */
+     *  toggle's ResizeObserver and post-render rAF. Axis follows Values Layout. */
     private updateEdgeFades(tog: ToggleState): void {
         const track = tog.trackEl;
         if (!track) return;
-        const max = track.scrollWidth - track.clientWidth;
-        const x = track.scrollLeft;
-        track.classList.toggle("has-overflow-l", x > 4);
-        track.classList.toggle("has-overflow-r", x < max - 4);
+        const layout = (this.fmtSettings.orientation.valuesLayout.value as { value?: string })?.value || "horizontal";
+        if (layout === "vertical") {
+            const max = track.scrollHeight - track.clientHeight;
+            const v = track.scrollTop;
+            track.classList.toggle("has-overflow-t", v > 4);
+            track.classList.toggle("has-overflow-b", v < max - 4);
+            track.classList.remove("has-overflow-l", "has-overflow-r");
+        } else {
+            const max = track.scrollWidth - track.clientWidth;
+            const v = track.scrollLeft;
+            track.classList.toggle("has-overflow-l", v > 4);
+            track.classList.toggle("has-overflow-r", v < max - 4);
+            track.classList.remove("has-overflow-t", "has-overflow-b");
+        }
     }
 
     /** Update edge-fade classes for the toggles-wrap container. Axis depends
@@ -1771,13 +1789,22 @@ export class Visual implements IVisual {
         if (!active) return;
 
         const padNum = parseFloat(getComputedStyle(track).getPropertyValue("--toggle-padding")) || 0;
-        // active.offsetLeft = offset relative to its offsetParent (.tb-toggle-track,
-        // which is positioned). Independent of track.scrollLeft, so the thumb stays
-        // glued to its button as the user scrolls.
-        const x = active.offsetLeft - padNum;
-        const w = active.offsetWidth + 6;
-        track.style.setProperty("--thumb-x", x + "px");
-        track.style.setProperty("--thumb-w", w + "px");
+        // Values Layout = vertical → thumb slides along Y, sized by height.
+        // offsetTop / offsetHeight (or offsetLeft / offsetWidth) are relative
+        // to the track (positioned ancestor). Independent of scroll position,
+        // so the thumb stays glued to the active button regardless of scroll.
+        const layout = (this.fmtSettings.orientation.valuesLayout.value as { value?: string })?.value || "horizontal";
+        if (layout === "vertical") {
+            const y = active.offsetTop - padNum;
+            const h = active.offsetHeight + 6;
+            track.style.setProperty("--thumb-y", y + "px");
+            track.style.setProperty("--thumb-h", h + "px");
+        } else {
+            const x = active.offsetLeft - padNum;
+            const w = active.offsetWidth + 6;
+            track.style.setProperty("--thumb-x", x + "px");
+            track.style.setProperty("--thumb-w", w + "px");
+        }
         track.classList.add("tb-ready");
     }
 
@@ -1805,6 +1832,23 @@ export class Visual implements IVisual {
         // flex:1 1 0 on the buttons. No-op in Fit mode (already equal-share).
         const equalWidth = s.sizing.equalWidth.value === true;
         this.root.classList.toggle("tb-equal-width", equalWidth);
+
+        // Values Layout (Orientation card). When set to vertical, the values
+        // inside ONE toggle stack top-to-bottom instead of arranging side-by-side.
+        // Track flex-direction switches to column, thumb slides vertically,
+        // overflow goes Y-axis, and the Wave shimmer's mask sweeps top-to-bottom.
+        // Per-Value shimmer keeps its horizontal sweep regardless (per spec).
+        const valuesLayout = (s.orientation.valuesLayout.value as { value?: string })?.value || "horizontal";
+        const valuesVertical = valuesLayout === "vertical";
+        this.root.classList.toggle("tb-values-vertical", valuesVertical);
+
+        // Combined class: vertical-values + verticalAlign=stretch. Without this,
+        // vertical-values toggles take their natural height (sum of stacked
+        // button heights) and the wrap centers them. With it, the toggle and
+        // its inner track expand to fill the available block height — the
+        // user-visible "stretch" effect on the Y axis.
+        const vAlign = (s.orientation.verticalAlign.value as { value?: string })?.value || "stretch";
+        this.root.classList.toggle("tb-values-vertical-stretch", valuesVertical && vAlign === "stretch");
 
         s.sizing.size.visible        = !isFit;
 
@@ -2070,19 +2114,30 @@ export class Visual implements IVisual {
                     const padPx = parseFloat(getComputedStyle(t.trackEl).getPropertyValue("--toggle-padding")) || 0;
                     const last = t.btnEls[t.btnEls.length - 1];
                     if (last) {
-                        const W = last.offsetLeft + last.offsetWidth - padPx;
-                        if (W > 0) {
+                        // Axis follows valuesLayout. Horizontal: 90deg gradient,
+                        // stops along x (offsetLeft + offsetWidth). Vertical:
+                        // 180deg gradient, stops along y (offsetTop + offsetHeight).
+                        // The mask's animation direction is selected by the LESS
+                        // class — see .tb-values-vertical .tb-block.tb-shimmer-wave
+                        // .tb-toggle::after { animation: tb-shimmer-mask-sweep-y }.
+                        const totalSpan = valuesVertical
+                            ? last.offsetTop + last.offsetHeight - padPx
+                            : last.offsetLeft + last.offsetWidth - padPx;
+                        if (totalSpan > 0) {
                             const stops: string[] = [];
                             for (let i = 0; i < t.btnEls.length; i++) {
                                 const btn = t.btnEls[i];
                                 const item = t.items[i];
                                 if (!btn || !item) continue;
                                 const hex = this.colorForRow(t, item.rowIdx, "animation", "shimmerColor", fallbackHex);
-                                const start = ((btn.offsetLeft - padPx) / W) * 100;
-                                const end   = ((btn.offsetLeft - padPx + btn.offsetWidth) / W) * 100;
+                                const startPx = (valuesVertical ? btn.offsetTop : btn.offsetLeft) - padPx;
+                                const sizePx  = valuesVertical ? btn.offsetHeight : btn.offsetWidth;
+                                const start = (startPx / totalSpan) * 100;
+                                const end   = ((startPx + sizePx) / totalSpan) * 100;
                                 stops.push(`${hex} ${start.toFixed(4)}%`, `${hex} ${end.toFixed(4)}%`);
                             }
-                            const grad = `linear-gradient(90deg, ${stops.join(", ")})`;
+                            const angle = valuesVertical ? "180deg" : "90deg";
+                            const grad = `linear-gradient(${angle}, ${stops.join(", ")})`;
                             t.toggleEl.style.setProperty("--tb-shimmer-track-gradient", grad);
                         }
                     }
