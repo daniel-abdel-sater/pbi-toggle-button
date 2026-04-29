@@ -3,6 +3,7 @@
 A glass-pill slicer-style toggle for Power BI. Bind 1–5 fields, each renders its own toggle pill. Cross-filters the report like a native slicer.
 
 <img width="1098" height="139" alt="image" src="https://github.com/user-attachments/assets/e7057172-ab2b-4c94-b9e7-d72c23b5ae93" />
+<img width="149" height="920" alt="image" src="https://github.com/user-attachments/assets/f5c475bd-99e2-468e-b245-6487873eb3df" />
 
 
 ## Install
