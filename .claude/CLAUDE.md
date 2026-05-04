@@ -1,8 +1,9 @@
-# Toggle Button — Project Knowledge File
+# Glass Slicer — Project Knowledge File
 
-**Created:** 2026-04-24
+**Created:** 2026-04-24 (originally "Toggle Button"; renamed to "Glass Slicer" 2026-04-29 after the scope expanded from a 2-value A/B toggle to a full data-driven multi-field slicer with shimmer/animation/FX)
 **Type:** Power BI custom visual
 **Tech stack:** TypeScript 4.9, pbiviz 5.4, powerbi-visuals-api 5.11, powerbi-visuals-utils-formattingmodel 6.x, LESS
+**Repo / GUID note:** GUID kept as `toggleButtonDA2604241000A1B2` so existing reports keep working through the rename. Internal `name` changed `toggleButton` → `glassSlicer`. GitHub repo URL unchanged.
 
 ---
 

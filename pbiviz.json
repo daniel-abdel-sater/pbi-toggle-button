@@ -1,17 +1,17 @@
 {
   "visual": {
-    "name": "toggleButton",
-    "displayName": "Toggle Button",
+    "name": "glassSlicer",
+    "displayName": "Glass Slicer",
     "guid": "toggleButtonDA2604241000A1B2",
     "visualClassName": "Visual",
     "version": "1.0.0.0",
-    "description": "A toggle switch slicer bound to a 2-value field. Click a side to cross-filter the report; click the selected side again to clear.",
-    "supportUrl": "https://github.com/daniel-abdel-sater/pbi-toggle-button.git",
+    "description": "A glass-pill slicer with sliding thumb, per-value glow, and animated shimmer. Bind 1–5 fields — each renders its own pill with single or multi-select. Cross-filters the report like a native slicer; supports conditional formatting (FX) on every color, drag-to-scroll, and vertical or horizontal value layouts.",
+    "supportUrl": "support@danbistudio.com",
     "gitHubUrl": "https://github.com/daniel-abdel-sater/pbi-toggle-button.git"
   },
   "author": {
     "name": "Daniel Abdel Sater",
-    "email": "danielabdelsate@gmail.com"
+    "email": "support@danbistudio.com"
   },
   "apiVersion": "5.11.0",
   "style": "style/visual.less",

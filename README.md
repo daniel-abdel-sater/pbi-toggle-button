@@ -1,6 +1,6 @@
-# Toggle Button — Power BI Custom Visual
+# Glass Slicer — Power BI Custom Visual
 
-A glass-pill slicer-style toggle for Power BI. Bind 1–5 fields, each renders its own toggle pill. Cross-filters the report like a native slicer.
+A glass-pill slicer with sliding thumb, per-value glow, and animated shimmer. Bind 1–5 fields, each renders its own pill. Cross-filters the report like a native slicer.
 
 ![Toggle Button](assets/icon.png)
 
