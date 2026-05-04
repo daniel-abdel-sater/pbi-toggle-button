@@ -2,7 +2,10 @@
 
 A glass-pill slicer with sliding thumb, per-value glow, and animated shimmer. Bind 1–5 fields, each renders its own pill. Cross-filters the report like a native slicer.
 
-![Toggle Button](assets/icon.png)
+![Glass Slicer](assets/icon.png)
+
+<img width="1098" height="139" alt="image" src="https://github.com/user-attachments/assets/e7057172-ab2b-4c94-b9e7-d72c23b5ae93" />
+<img width="149" height="920" alt="image" src="https://github.com/user-attachments/assets/f5c475bd-99e2-468e-b245-6487873eb3df" />
 
 ## Install
 
@@ -134,10 +137,6 @@ npm install
 npx pbiviz package
 # output: dist/toggleButtonDA2604241000A1B2.1.0.0.0.pbiviz
 ```
-
-## License
-
-MIT — see [LICENSE](LICENSE) (add a license file if you don't have one).
 
 ## Author
 
